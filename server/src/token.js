@@ -38,9 +38,9 @@ const fail = (code, reason, extra = {}) => ({ ok: false, code, reason, ...extra 
 export function verifyToken(token, { nowSec }) {
   try {
     if (typeof token !== 'string' || !token) return fail('token_missing', 'no token was presented');
-    if (token.length > MAX_TOKEN) return fail('token_malformed', 'the token is longer than the lab accepts');
+    if (token.length > MAX_TOKEN) return fail('token_malformed', 'the token exceeds the length the lab accepts');
     const parts = token.split('.');
-    if (parts.length !== 3 || !parts.every((p) => p && BASE64URL.test(p))) return fail('token_malformed', 'a token is three base64url parts joined by dots');
+    if (parts.length !== 3 || !parts.every((p) => p && BASE64URL.test(p))) return fail('token_malformed', 'a token has three base64url parts joined by dots');
     let header;
     try { header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')); } catch { return fail('token_malformed', 'the token header is not JSON'); }
     if (!isObj(header)) return fail('token_malformed', 'the token header is not an object');
@@ -55,7 +55,7 @@ export function verifyToken(token, { nowSec }) {
     for (const k of ['exp', 'nbf', 'iat']) if (typeof claims[k] !== 'number' || !Number.isFinite(claims[k])) return fail('token_claims', `the ${k} claim is missing or is not a number`, { header });
     if (claims.iss !== ISSUER) return fail('token_issuer', 'the issuer is not the lab\'s', { header });
     if (claims.aud !== AUDIENCE) return fail('token_audience', 'the audience is not this gateway', { header });
-    if (claims.nbf > nowSec) return fail('token_not_yet_valid', 'the token is not valid yet on the lab clock', { header });
+    if (claims.nbf > nowSec) return fail('token_not_yet_valid', 'the token lies before its not-before time on the lab clock', { header });
     if (claims.exp <= nowSec) return fail('token_expired', 'the token has expired on the lab clock', { header });
     return { ok: true, header, claims };
   } catch { return fail('token_error', 'the token could not be checked'); }

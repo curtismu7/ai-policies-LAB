@@ -30,7 +30,7 @@ export const scenarioList = (c) => [
         base(c, { scope: `${c.castApp}:read` }), { route: route(c), tool: c.castToolWrite, arguments: { record: c.castRecord, amount: 50 }, headers: { 'x-scopes': `${c.castApp}:write ${c.castApp}:admin` } }, 'deny:scope_missing'),
       ev('End user: the person cannot be identified', `The key and the scope are fine, but a rule on ${c.castToolWrite} needs a person, and the token's end_user is nobody in the roster.`,
         base(c, { end_user: 'ghost.user' }), { route: route(c), tool: c.castToolWrite, arguments: { record: c.castRecord, amount: 50 } }, 'deny:end_user_unresolved'),
-      ev('All four pass: allowed', `${c.castUser} is on the rule, the scope is held, the department matches, the surface is inside the key and its identity, and the amount is under ${c.castLimit}.`,
+      ev('All four layers pass, allowed', `${c.castUser} is on the rule, the scope is held, the department matches, the surface is inside the key and its identity, and the amount is under ${c.castLimit}.`,
         base(c), { route: route(c), tool: c.castToolWrite, arguments: { record: c.castRecord, amount: 50 } }, 'allow:allowed'),
     ],
   },

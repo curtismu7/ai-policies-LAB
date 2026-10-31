@@ -5,7 +5,8 @@
 import { DETECTORS, maskSpans } from './credentials.js';
 
 const SPECIFIC = DETECTORS.filter((d) => !d.generic);
-const OPAQUE = new Set(['hash', 'prevHash', 'traceparent', 'traceId', 'chainHead']);
+// labToken: only the mint answer carries one, signed by the lab's own throwaway key and labelled mock-issued.
+const OPAQUE = new Set(['hash', 'callHash', 'traceparent', 'traceId', 'labToken']);
 
 export function maskResponseText(text) {
   const spans = [];

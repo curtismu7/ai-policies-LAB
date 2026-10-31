@@ -27,7 +27,7 @@ export const LAB_EPOCH_MS = Date.parse('2026-11-02T09:00:00.000Z');
 export const ADVANCE_MAX_MIN = 10080;
 export const STAGES = ['request', 'token', 'surface', 'application', 'action', 'end-user', 'attended-unattended', 'request-inspection', 'call', 'reply-inspection'];
 export const STAGE_TITLE = {
-  request: 'The call is read', token: 'The token is verified', surface: '1. Surface scope', application: '2. Application policy', action: '3. Action scope', 'end-user': '4. End-user scope',
+  request: 'The call is read', token: 'Token verification', surface: '1. Surface scope', application: '2. Application policy', action: '3. Action scope', 'end-user': '4. End-user scope',
   'attended-unattended': 'Attended and unattended', 'request-inspection': 'Request inspection', call: 'The call is made (simulated upstream)', 'reply-inspection': 'Reply inspection',
 };
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -77,7 +77,7 @@ export class Engine {
 
   // ---- tokens ----
   mintToken(p) {
-    if (!isObj(p) || !isObj(p.claims)) throw refuse('bad_claims', 'a token is minted from a claims object');
+    if (!isObj(p) || !isObj(p.claims)) throw refuse('bad_claims', 'tokens are minted from a claims object');
     const ttlMin = p.ttlMin === undefined ? 60 : p.ttlMin;
     if (!Number.isInteger(ttlMin) || ttlMin < 1 || ttlMin > MAX_TTL_MIN) throw refuse('bad_ttl', `ttlMin is a whole number of minutes from 1 to ${MAX_TTL_MIN}`);
     const keys = Object.keys(p.claims);
