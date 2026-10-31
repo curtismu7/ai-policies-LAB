@@ -1,0 +1,350 @@
+{
+  "schema": "demo-content-pack/1",
+  "id": "ai-policies-lab",
+  "title": "AI Policies LAB",
+  "version": "0.1.0",
+  "demo": {
+    "id": "ai-policies-lab",
+    "name": "AI Policies LAB",
+    "catalog": "D109",
+    "baseUrl": "http://localhost:7500",
+    "doctor": "/api/health",
+    "tags": [
+      "ai-policies",
+      "scope",
+      "hitl",
+      "approval",
+      "attended-unattended",
+      "fail-closed",
+      "simulated"
+    ]
+  },
+  "glossary": [
+    {
+      "id": "surface-scope",
+      "term": "Surface scope",
+      "definition": "Which gateway surface a credential may touch at all: a model, a tool server or a peer agent. Derived from the route, so it is refused before any policy is consulted; the owning identity caps the key. The lab's route prefixes (/llm/, /mcp/, /a2a/) are lab-invented. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "identity caps the key"
+      ]
+    },
+    {
+      "id": "application-policy",
+      "term": "Application policy",
+      "definition": "Which applications an identity reaches, and which claims the presented token must carry before an application is reachable. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "required claims"
+      ]
+    },
+    {
+      "id": "action-scope",
+      "term": "Action scope",
+      "definition": "Which actions are permitted inside an application the caller can already reach, read from the verified token and never from anything the caller supplies. A rule can require a specific scope before a tool may be invoked. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "scope from the token"
+      ]
+    },
+    {
+      "id": "end-user-scope",
+      "term": "End-user scope",
+      "definition": "The only layer that reaches past the service identity, to what the person behind the agent may do. It needs an identity that resolves to a real user; a rule naming a person who could never be identified is refused when it is saved. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "person behind the agent"
+      ]
+    },
+    {
+      "id": "third-outcome",
+      "term": "The third outcome: hold for a person",
+      "definition": "Policy is asked whether a call may proceed attended and whether it may proceed unattended. Allow-then-deny means hold for a human; a rule that refuses the attended form is a hard denial. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "hold",
+        "HITL",
+        "attended and unattended"
+      ]
+    },
+    {
+      "id": "hard-denial",
+      "term": "Hard denial",
+      "definition": "A refusal of the attended form: no approval path exists, and presenting an approval changes nothing. Inspection rules can refuse a call or withhold a result but can never hold it. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "no approval can lift it"
+      ]
+    },
+    {
+      "id": "no-held-connection",
+      "term": "No held connection",
+      "definition": "An approval takes minutes to hours, so the request is refused at once with a reason, a reference and an owning expiry instead of being held open. The agent retries after an approver signs. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "retry"
+      ]
+    },
+    {
+      "id": "bound-approval",
+      "term": "Bound, single-use approval",
+      "definition": "An approval is single-use and bound to the exact call, or to a fixed period, with a number of approvers, named roles and a minimum authentication strength. It cannot be replayed for a second transaction, and it is an input to the next evaluation, not a bypass. The lab's approval record, states and the 1-3 authentication levels are lab-invented. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "single-use",
+        "period grant"
+      ]
+    },
+    {
+      "id": "canonical-hash",
+      "term": "Canonical call hash",
+      "definition": "The deck says an approval is bound to a canonical hash of method, target and arguments. The canonical form (key order, Unicode NFC, number formats, refused inputs) is LAB-INVENTED, written so one approval cannot cover a call it was not given for. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "call hash"
+      ]
+    },
+    {
+      "id": "where-it-runs",
+      "term": "Where it can run",
+      "definition": "A hold can only happen before the call is made. Rules that read inspection findings run after the request has been examined or after the reply has come back: refuse the call or withhold the result, never hold. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "pre-call",
+        "post-inspection"
+      ]
+    },
+    {
+      "id": "fail-closed",
+      "term": "Fails closed",
+      "definition": "An evaluation error denies and an argument of the wrong type denies. The rest of the slide line is cut off in the PDF: the lab refuses a rule naming something that does not exist when it is saved, as a lab reading of a partly-cut-off deck line, not the deck's words. Ping release claim, UNVERIFIED on our tenant.",
+      "aliases": [
+        "deny on error"
+      ]
+    },
+    {
+      "id": "lab-clock",
+      "term": "The lab clock",
+      "definition": "A clock the visitor advances so approval expiry, periods and token lifetime can be seen. It only moves forward. Lab-invented.",
+      "aliases": []
+    }
+  ],
+  "sources": [
+    {
+      "id": "deck-slides",
+      "title": "Ping ID4AI Workforce H2 2026 deck, slide 52 (with 35, 36 and 48)",
+      "url": "https://example.invalid/ping-id4ai-workforce-h2-2026-deck",
+      "kind": "deck",
+      "use": "The AI Policies release claims.",
+      "status": "read",
+      "checked": "2026-10-31"
+    },
+    {
+      "id": "our-notes",
+      "title": "Our own notes on hold, hard refusal and token-scope gating (measured on our tenant, not the deck)",
+      "url": "https://example.invalid/our-privilege-notes",
+      "kind": "note",
+      "use": "Labelled \"measured (our note)\" wherever the lab uses them.",
+      "status": "read",
+      "checked": "2026-10-31"
+    }
+  ],
+  "cards": [
+    {
+      "id": "try-four-layers",
+      "label": "Scenario 1: Four layers, one at a time",
+      "description": "Four scope checks run in order, and each stops the call on its own. reporting-agent's key claims the model surface, but its identity does not hold it. Then an application reporting-agent was never given, then a claim the application needs, then a scope the token lacks (a header that claims the scope is ignored), then a person who cannot be identified. The last call passes every layer.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#evaluate"
+      },
+      "terms": [
+        "surface-scope",
+        "application-policy",
+        "action-scope",
+        "end-user-scope"
+      ],
+      "story": "S01"
+    },
+    {
+      "id": "try-hold-and-retry",
+      "label": "Scenario 2: Hold for a human, sign, retry",
+      "description": "a payee change is allowed attended and refused unattended, so the call is held: it is refused at once with a reference and an expiry, nothing stays open. Wrong approvers are refused (the requester, a missing role, too weak a sign-in), one signs, the agent retries and proceeds. The same approval cannot be replayed, and changed arguments need a new one.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#evaluate"
+      },
+      "terms": [
+        "third-outcome",
+        "no-held-connection",
+        "bound-approval"
+      ],
+      "story": "S02"
+    },
+    {
+      "id": "try-hard-denial",
+      "label": "Scenario 3: A hard denial no approval can lift",
+      "description": "close_account is refused in the attended form, so it is a hard denial, not a hold: there is no approval path. Even a valid, signed approval for another call changes nothing.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#evaluate"
+      },
+      "terms": [
+        "hard-denial",
+        "third-outcome"
+      ],
+      "story": "S03"
+    },
+    {
+      "id": "try-period-approval",
+      "label": "Scenario 4: A fixed period, two approvers",
+      "description": "a payment above the limit is held, and the approval is for a fixed period instead of one exact call: two different approvers at a hardware-key level (a duplicate counts once). While the period runs, calls to that tool proceed; when it ends, the next one is held again.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#evaluate"
+      },
+      "terms": [
+        "bound-approval",
+        "lab-clock"
+      ],
+      "story": "S04"
+    },
+    {
+      "id": "try-post-inspection",
+      "label": "Scenario 5: Where it can run: findings cannot hold",
+      "description": "Rules that read inspection findings run only after the request has been examined or after the reply has come back. The choice there is refuse the call or withhold the result. Neither can pause for a person, and a rule that tries is refused when saved.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#evaluate"
+      },
+      "terms": [
+        "where-it-runs",
+        "hard-denial"
+      ],
+      "story": "S05"
+    },
+    {
+      "id": "try-fail-closed",
+      "label": "Scenario 6: Fail closed",
+      "description": "An evaluation error denies. An argument of the wrong type denies. A tampered token denies. A rule naming something that does not exist is refused when saved, and anything that slips past is handled safely (a lab reading of a partly-cut-off deck line, not the deck's words).",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#evaluate"
+      },
+      "terms": [
+        "fail-closed",
+        "canonical-hash"
+      ],
+      "story": "S06"
+    },
+    {
+      "id": "try-policies",
+      "label": "Save a rule that names a person who does not exist",
+      "description": "In Live mode, edit the end-user rules and add a name that is not in the roster: the save is refused with the reason.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#policies"
+      },
+      "terms": [
+        "end-user-scope",
+        "fail-closed"
+      ]
+    },
+    {
+      "id": "try-approvals",
+      "label": "Approve as the wrong person",
+      "description": "Act as the requester, someone without the role, or sign in too weakly: the lab refuses and says why.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#approvals"
+      },
+      "terms": [
+        "bound-approval",
+        "third-outcome"
+      ]
+    },
+    {
+      "id": "concept-why-ai-policies",
+      "label": "Why it matters: AI Policies, scope and HITL (slide 52)",
+      "description": "Challenge: once an agent can act rather than answer, authorization says only the name of a tool; the risk sits in the amount, the counterparty, the destination and the hour. Technical: four layered scope checks read from the verified token, plus a third outcome that holds for a person; approvals are inputs to evaluation, never bypasses. Business: high-stakes agent actions become approvable without standing human review, the control that unblocks unattended agents in regulated processes. These are Ping claims, unverified on our tenant.",
+      "group": "concept",
+      "action": {
+        "type": "route",
+        "href": "/#talk"
+      },
+      "terms": [
+        "third-outcome",
+        "end-user-scope",
+        "bound-approval"
+      ]
+    },
+    {
+      "id": "concept-where",
+      "label": "Where it can run",
+      "description": "Pre-call: allow, deny, hold. Post-inspection: refuse the call or withhold the result.",
+      "group": "concept",
+      "action": {
+        "type": "route",
+        "href": "/#where"
+      },
+      "terms": [
+        "where-it-runs",
+        "hard-denial"
+      ]
+    },
+    {
+      "id": "concept-diagram",
+      "label": "Diagrams",
+      "description": "Two diagrams: one call through the four layers; and where it can run.",
+      "group": "concept",
+      "action": {
+        "type": "route",
+        "href": "/#diagram"
+      },
+      "terms": [
+        "third-outcome",
+        "where-it-runs"
+      ]
+    },
+    {
+      "id": "ref-doctor",
+      "label": "Doctor and health",
+      "description": "Preflight checks and the demo-health/1 endpoint.",
+      "group": "setup",
+      "action": {
+        "type": "route",
+        "href": "/api/health"
+      }
+    }
+  ],
+  "stories": [
+    {
+      "id": "S01",
+      "title": "Four layers, one at a time",
+      "say": "Four scope checks run in order, and each stops the call on its own. reporting-agent's key claims the model surface, but its identity does not hold it. Then an application reporting-agent was never given, then a claim the application needs, then a scope the token lacks (a header that claims the scope is ignored), then a person who cannot be identified. The last call passes every layer."
+    },
+    {
+      "id": "S02",
+      "title": "Hold for a human, sign, retry",
+      "say": "a payee change is allowed attended and refused unattended, so the call is held: it is refused at once with a reference and an expiry, nothing stays open. Wrong approvers are refused (the requester, a missing role, too weak a sign-in), one signs, the agent retries and proceeds. The same approval cannot be replayed, and changed arguments need a new one."
+    },
+    {
+      "id": "S03",
+      "title": "A hard denial no approval can lift",
+      "say": "close_account is refused in the attended form, so it is a hard denial, not a hold: there is no approval path. Even a valid, signed approval for another call changes nothing."
+    },
+    {
+      "id": "S04",
+      "title": "A fixed period, two approvers",
+      "say": "a payment above the limit is held, and the approval is for a fixed period instead of one exact call: two different approvers at a hardware-key level (a duplicate counts once). While the period runs, calls to that tool proceed; when it ends, the next one is held again."
+    },
+    {
+      "id": "S05",
+      "title": "Where it can run: findings cannot hold",
+      "say": "Rules that read inspection findings run only after the request has been examined or after the reply has come back. The choice there is refuse the call or withhold the result. Neither can pause for a person, and a rule that tries is refused when saved."
+    },
+    {
+      "id": "S06",
+      "title": "Fail closed",
+      "say": "An evaluation error denies. An argument of the wrong type denies. A tampered token denies. A rule naming something that does not exist is refused when saved, and anything that slips past is handled safely (a lab reading of a partly-cut-off deck line, not the deck's words)."
+    }
+  ]
+}

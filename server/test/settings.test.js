@@ -17,7 +17,7 @@ test('only this lab\'s own key is taken from the shared settings file; every oth
     assert.deepEqual(readSharedSettings(f), { AIP_LAB_MODE: 'live' });
     const env = { HOME: '/x' };
     applySharedSettings(env, f);
-    assert.deepEqual(Object.keys(env).sort(), ['HOME', 'AIP_LAB_MODE']);
+    assert.deepEqual(Object.keys(env).sort(), ['AIP_LAB_MODE', 'HOME']);
     assert.equal(env.AIP_LAB_MODE, 'live');
   });
 });
