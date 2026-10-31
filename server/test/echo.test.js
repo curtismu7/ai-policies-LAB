@@ -95,3 +95,16 @@ test('the token the visitor holds is never echoed by an evaluation (only a maske
     assert.ok(!tampered.includes(token.split('.')[2]) && !tampered.includes(token.split('.')[1]));
   });
 });
+
+test('defence in depth: a credential that somehow reaches engine state is still masked by the response mask on every answer', async () => {
+  await withServer(async (url, { workspaces }) => {
+    const e = workspaces.engine('default', 'finance', C);
+    for (const [name, n] of Object.entries(NEEDLES)) {
+      if (['blob', 'hex', 'key31'].includes(name)) continue; // generic long-run shapes are masked on the way IN only: ids and hashes in answers are long too
+      e.outbox.push({ id: `out-x-${name}`, at: 'now', channel: 'slack', label: 'x', to: [], ref: 'apr-0001', subject: `leak ${n.raw}`, expiresAt: 'x', delivered: false });
+      const text = await (await get(url, '/api/state?mode=live')).text();
+      assert.ok(!text.includes(n.probe), `${name}: the response mask must catch it`);
+      e.outbox.pop();
+    }
+  });
+});
