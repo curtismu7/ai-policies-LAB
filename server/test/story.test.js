@@ -44,6 +44,9 @@ test('docs/talk-track.md is exactly what the generator makes (no drift)', () => 
 test('the response mask leaves every vertical\'s story untouched (it only changes credential-shaped values)', () => {
   for (const [v, c] of Object.entries(VERTICALS)) { const s = buildStory(c, v); assert.deepEqual(maskDeep(s), s, v); }
 });
+test('the response mask leaves every diagram, in every vertical, untouched (a phrase like "the token is ..." would be masked)', () => {
+  for (const [v, c] of Object.entries(VERTICALS)) for (const n of DIAGRAM_NAMES) { const d = buildDiagram(c, n); assert.deepEqual(maskDeep(d), d, `${v}/${n}`); }
+});
 test('the diagrams are diagram-studio/1 data, valid, loaded by name, with no overlapping node positions', () => {
   assert.deepEqual(DIAGRAM_NAMES, ['layers-and-hold', 'where-it-runs']);
   for (const n of DIAGRAM_NAMES) {

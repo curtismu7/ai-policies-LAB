@@ -2,7 +2,7 @@
   "schema": "diagram-studio/1",
   "id": "layers-and-hold",
   "title": "One call: four layers, then allow, hold or block",
-  "lede": "A call arrives with a token. The token is verified, four scope checks read only the verified claims, and policy is asked two questions: may this proceed attended, may it proceed unattended. Allow-then-deny holds the call for a person: it is refused at once, an approver signs, and the retry proceeds. Ping release claim, UNVERIFIED on our tenant. Simulated.",
+  "lede": "A call arrives with a token. The token gets verified, four scope checks read only the verified claims, and policy is asked two questions: may this proceed attended, may it proceed unattended. Allow-then-deny holds the call for a person: it is refused at once, an approver signs, and the retry proceeds. Ping release claim, UNVERIFIED on our tenant. Simulated.",
   "groups": {
     "client": {
       "label": "Caller",
@@ -133,7 +133,7 @@
       ]
     },
     {
-      "title": "The token is verified",
+      "title": "Token verification",
       "what": "The signature, issuer, audience and lifetime are checked. From here on only the verified claims are read.",
       "edges": [
         1

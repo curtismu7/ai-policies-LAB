@@ -28,7 +28,7 @@ test('the shelf entry is valid and portable: relative composeFile, loopback url,
 
 test('customer.config.json is git-ignored, and its example only sets the three cast values', () => {
   assert.match(read('.gitignore'), /^customer\.config\.json$/m);
-  assert.deepEqual(Object.keys(JSON.parse(read('customer.config.example.json')).cast).sort(), ['brand', 'engineer', 'host']);
+  assert.deepEqual(Object.keys(JSON.parse(read('customer.config.example.json')).cast).sort(), ['brand', 'host', 'user']);
 });
 
 test('no shipped text names a real customer, company or tenant', () => {

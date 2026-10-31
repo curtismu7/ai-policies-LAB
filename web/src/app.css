@@ -104,3 +104,4 @@ summary { cursor: pointer; font-weight: 700; font-size: 14px; }
 .steps button { text-align: left; width: 100%; }
 .preset { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .preset > span:first-child { min-width: 0; flex: 1 1 220px; }
+code { overflow-wrap: anywhere; }

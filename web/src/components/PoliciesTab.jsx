@@ -22,8 +22,13 @@ function Layer({ layer, rules, readOnly, busy, lab, errors, setErrors }) {
     try { parsed = JSON.parse(draft); } catch { setErrors((e) => ({ ...e, [layer.id]: [{ path: "", code: "not_json", reason: "the editor does not hold valid JSON" }] })); return; }
     const r = await lab.act("PUT", `/api/policies/${layer.id}`, { rules: parsed });
     setErrors((e) => ({ ...e, [layer.id]: r.ok ? null : (r.body?.errors || [{ path: "", code: r.body?.error || "refused", reason: r.body?.detail || "refused" }]) }));
+    if (r.ok) setDraft(JSON.stringify(r.body.state.policy[layer.id], null, 2));
   };
-  const reset = async () => { const r = await lab.act("POST", `/api/policies/${layer.id}/reset`, {}); setErrors((e) => ({ ...e, [layer.id]: r.ok ? null : e[layer.id] })); };
+  // A refused save keeps what you typed (and the reasons); a good save or a reset shows the layer as the server now holds it.
+  const reset = async () => {
+    const r = await lab.act("POST", `/api/policies/${layer.id}/reset`, {});
+    if (r.ok) { setErrors((e) => ({ ...e, [layer.id]: null })); setDraft(JSON.stringify(r.body.state.policy[layer.id], null, 2)); }
+  };
   const errs = errors[layer.id];
   const off = readOnly || busy;
   return (

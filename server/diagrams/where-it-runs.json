@@ -82,8 +82,8 @@
       "id": "released",
       "label": "Result released",
       "group": "client",
-      "x": 400,
-      "y": 400
+      "x": 1200,
+      "y": 600
     }
   ],
   "edges": [
