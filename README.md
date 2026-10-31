@@ -119,7 +119,7 @@ npm test    # server (node --test), web (vitest, drives the UI against the real 
 
 The shared checks are run by hand, because the scripts are not shipped into this repo's CI: `bash <AI-DEMO-Standalone>/scripts/check-drift.sh .`, `bash <AI-DEMO-Standalone>/scripts/check-css.sh .` and `node <demo-kit-base>/scripts/conformance.mjs . --new`.
 
-On Node 26: 250 tests pass (211 server, 16 web, 23 scripts).
+On Node 26: 252 tests pass (213 server, 16 web, 23 scripts).
 
 ## Troubleshooting
 

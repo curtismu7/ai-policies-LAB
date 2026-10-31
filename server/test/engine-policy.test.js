@@ -237,6 +237,7 @@ test('SAVE: shapes: not a list, too many rules, rules that are not objects, unkn
   const secret = ['gh', 'p_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8'].join('');
   assert.ok(errOf('apps', [{ id: 'a', identity: '*', app: C.castApp, requiredClaims: [{ claim: 'x', oneOf: [secret] }] }]).includes('bad_values'));
   assert.ok(errOf('apps', [{ id: 'a', identity: '*', app: C.castApp, requiredClaims: [{ claim: 'sub', oneOf: [] }] }]).includes('reserved_claim'));
+  for (const name of ['password', 'api_key', 'client_secret', 'db_password']) assert.ok(errOf('apps', [{ id: 'a', identity: '*', app: C.castApp, requiredClaims: [{ claim: name, oneOf: ['x'] }] }]).includes('bad_claim_name'), name);
   assert.ok(errOf('apps', [{ id: 'a', identity: '*', app: C.castApp, requiredClaims: Array.from({ length: 7 }, (_, i) => ({ claim: `c${i}`, oneOf: [] })) }]).includes('bad_claims'));
 });
 test('SAVE is atomic: one bad rule among good ones saves nothing; a good save replaces the layer; reset restores the default', () => {

@@ -7,8 +7,9 @@ import { C, get, post, withServer } from './helpers.js';
 import { sweep } from './sweep.js';
 import { cleanFree, findCredentials, normalizeForMatching } from '../src/credentials.js';
 import { maskDeep } from '../src/mask.js';
+import { shown } from '../src/engine.js';
 
-const INVISIBLE = [0x3164, 0xffa0, 0x115f, 0x1160, 0x034f, 0x180e, 0xfe00, 0xfe0f, 0xe0020, 0x061c, 0x2065, 0x206a, 0x206f, 0x17b4, 0x17b5, 0xfffd, 0x00ad, 0x200b, 0x200d, 0x2060, 0xfeff, 0x202e, 0x2062, 0x2066, 0x200e].map((n) => String.fromCodePoint(n));
+const INVISIBLE = [0x3164, 0xffa0, 0x115f, 0x1160, 0x034f, 0x180e, 0xfe00, 0xfe0f, 0xe0020, 0x061c, 0x2065, 0x206a, 0x206f, 0x17b4, 0x17b5, 0xfffd, 0x00ad, 0x200b, 0x200d, 0x2060, 0xfeff, 0x202e, 0x2062, 0x2066, 0x200e, 0x0600, 0x0601, 0x06dd, 0x070f, 0x08e2, 0x110bd, 0x1d173].map((n) => String.fromCodePoint(n));
 const J = (a, b, c) => [a, b, c].join('.');
 const SHAPES = [
   { name: 'jwt', raw: J('eyJhbGciOiJSUzI1NiJ9', 'eyJzdWIiOiJhYmNkZWYifQ', 'abcdefghij1234567890XYZ'), probe: 'eyJzdWIiOiJhYmNkZWYifQ' },
@@ -83,6 +84,7 @@ const SECRET_SHAPES = [
   ['{"token":"short.tok"}', 'short.tok'], ['{"authorization":"Basic zzzz9999"}', 'zzzz9999'], ['{"pin":"481516"}', '481516'], ['{"client_secret":"cs-77aa88bb"}', 'cs-77aa88bb'],
   ['{"private_key":"pk-1111"}', 'pk-1111'], ['{"credential":"cred-4242"}', 'cred-4242'], ['{"cred":{"password":"nested-pw-1"}}', 'nested-pw-1'], ['{"passcode":"pc-90909"}', 'pc-90909'],
   ['{"a":"password: x1x1x1","b":"password: zq81xkzq"}', 'zq81xkzq'], ['{"a":"password: x1x1x1","b":"password: zq81xkzq"}', 'x1x1x1'], ['password=aaa111,password=bbb222;pass=ccc333', 'bbb222'], ['password=aaa111,password=bbb222;pass=ccc333', 'ccc333'],
+  ['{"a":"password is x1x1x1","b":"password is zq81xkzq"}', 'zq81xkzq'], ['{"a":"password is x1x1x1","b":"password is zq81xkzq"}', 'x1x1x1'],
   ['{"a":"token: t1t1t1","b":"secret: s2s2s2","c":"api_key=k3k3k3"}', 's2s2s2'], ['{"a":"token: t1t1t1","b":"secret: s2s2s2","c":"api_key=k3k3k3"}', 'k3k3k3'],
 ];
 test('key-aware masking: a credential word as a key masks its value in any quoting; adjacent assignments each match (unit)', () => {
@@ -146,4 +148,18 @@ test('normalizeForMatching: deletes every Default_Ignorable, Cf and replacement 
   assert.equal(normalizeForMatching('%25252541'), '%41', 'three rounds only');
   assert.equal(normalizeForMatching('ｐａｓｓ'), 'pass');
   assert.equal(normalizeForMatching(undefined), '');
+});
+
+test('the canonical-form display (shown) sees through hidden credentials on its own, not only through the response mask behind it', () => {
+  for (const ch of INVISIBLE) for (const sh of SHAPES) assert.ok(!unhide(shown(`{"arguments":{"x":"${interleave(sh.raw, ch)}"}}`, 600)).includes(sh.probe), `${sh.name} U+${ch.codePointAt(0).toString(16)}`);
+  const plain = '{"arguments":{"record":"payee-1042"},"method":"tools/call"}';
+  assert.equal(shown(plain, 600), plain, 'an ordinary canonical form is shown exactly as it is hashed');
+});
+test('a credential-shaped claim value or claim name, even hidden, is REFUSED at mint (not just masked), and so is a credential-word claim name', async () => {
+  await withServer(async (url) => {
+    const bad = async (claims) => post(url, '/api/token', live({ token: { claims } }));
+    for (const ch of ['\u3164', '\u200b', '\u{e0020}', '\u0600']) for (const sh of SHAPES.filter((x) => x.raw.length * 2 < 118)) { const r = await bad({ note: interleave(sh.raw, ch) }); assert.equal(r.status, 400, `${sh.name} ${ch.codePointAt(0)}`); assert.equal((await r.json()).error, 'credential_shaped'); }
+    for (const name of ['password', 'api_key', 'client_secret', 'access_token', 'authorization', 'pin', 'db_password']) { const r = await bad({ [name]: 'x' }); assert.equal(r.status, 400, name); assert.equal((await r.json()).error, 'bad_claim_name', name); }
+    assert.equal((await bad({ department: 'finance', max_tokens: 4096 })).status, 200, 'ordinary claims, including max_tokens, are fine');
+  });
 });
