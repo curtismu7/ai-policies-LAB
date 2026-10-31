@@ -8,7 +8,7 @@
 // Saving a layer validates EVERY rule and saves nothing if one is wrong (atomic). A rule that names something that does not exist (an unknown user, tool,
 // application, scope, role, argument, identity) is refused with the reason: "a rule naming something that does not exist" is handled safely, and the
 // slide text is cut off at that point in the PDF, so this is a LAB READING of a partly-cut-off deck line, not the deck's words.
-import { cleanFree, findCredentials } from './credentials.js';
+import { cleanFree, isCredentialKey, looksLikeCredential } from './credentials.js';
 import { ARG_TYPES, AUTH_LEVELS, CHANNELS, FINDINGS, SURFACES, hasApp, hasTool } from './catalog.js';
 import { FORBIDDEN_KEYS } from './canon.js';
 
@@ -90,7 +90,7 @@ export function validateLayer(layer, rules, ctx) {
   const humans = roster.filter((r) => r.kind === 'human'); const agents = roster.filter((r) => r.kind === 'agent');
   const ids = new Set();
   const str = (v, max = LIMITS.valueLength) => typeof v === 'string' && v.length > 0 && v.length <= max;
-  const plain = (v) => str(v) && findCredentials(v).length === 0 && cleanFree(v, 100) === v;
+  const plain = (v) => str(v) && !looksLikeCredential(v) && cleanFree(v, 100) === v;
   const known = (path, v, list, what) => { if (typeof v !== 'string' || !list.includes(v)) { err(path, `unknown_${what}`, what === 'user' ? 'a rule names a person who could never be identified (not in the roster), so it is refused when saved instead of failing silently later' : `a rule names ${what === 'identity' ? 'an' : 'a'} ${what} that does not exist, so it could never match`); return false; } return true; };
 
   rules.forEach((r, i) => {
@@ -101,7 +101,7 @@ export function validateLayer(layer, rules, ctx) {
     const shape = { identities: ['identity', 'surfaces'], apps: ['identity', 'app', 'requiredClaims'], actions: ['app', 'tool', 'requiresScope'], users: ['app', 'tool', 'users'],
       holds: ['app', 'tool', 'when', 'attended', 'unattended', 'approval'], inspection: ['stage', 'finding', 'action'] }[layer];
     if (!keysOk(r, [...base, ...shape])) err(at, 'unknown_field', 'a rule carries a field this layer does not take');
-    if (typeof r.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(r.id) || findCredentials(r.id).length) err(`${at}.id`, 'bad_id', `a rule id is lowercase letters, digits and dashes, at most ${LIMITS.idLength} characters`);
+    if (typeof r.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(r.id) || looksLikeCredential(r.id)) err(`${at}.id`, 'bad_id', `a rule id is lowercase letters, digits and dashes, at most ${LIMITS.idLength} characters`);
     else if (ids.has(r.id)) err(`${at}.id`, 'duplicate_id', 'two rules in a layer share an id'); else ids.add(r.id);
 
     if (layer === 'identities') {
@@ -115,7 +115,7 @@ export function validateLayer(layer, rules, ctx) {
       else r.requiredClaims.forEach((c, j) => {
         const cp = `${at}.requiredClaims[${j}]`;
         if (!isObj(c) || !keysOk(c, ['claim', 'oneOf'])) return err(cp, 'bad_claims', 'a required claim is { claim, oneOf }');
-        if (typeof c.claim !== 'string' || !/^[a-z][a-z0-9_]{0,39}$/.test(c.claim) || findCredentials(c.claim).length) err(`${cp}.claim`, 'bad_claim_name', 'a claim name is lowercase letters, digits and underscores');
+        if (typeof c.claim !== 'string' || !/^[a-z][a-z0-9_]{0,39}$/.test(c.claim) || looksLikeCredential(c.claim) || isCredentialKey(c.claim)) err(`${cp}.claim`, 'bad_claim_name', 'a claim name is lowercase letters, digits and underscores');
         else if (['exp', 'nbf', 'iat', 'iss', 'aud', 'sub'].includes(c.claim)) err(`${cp}.claim`, 'reserved_claim', 'the registered claims are checked by the token step, not by a rule');
         if (!Array.isArray(c.oneOf) || c.oneOf.length > LIMITS.valuesPerClaim || !c.oneOf.every(plain)) err(`${cp}.oneOf`, 'bad_values', `oneOf is a list of at most ${LIMITS.valuesPerClaim} short plain strings (empty means the claim only has to be present)`);
       });

@@ -5,7 +5,7 @@
 //   secret       a credential-shaped value (the same detectors that mask what the visitor types)
 // The text is normalised first (NFKC, zero-width and bidi characters deleted, spaces collapsed) so interleaving cannot hide a finding. A finding names its
 // KIND and WHERE, never the value.
-import { findCredentials } from './credentials.js';
+import { findCredentials, normalizeForMatching } from './credentials.js';
 
 const HIDDEN = /[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 const PHRASES = ['ignore previous instructions', 'ignore all previous', 'ignore the above', 'disregard the above', 'disregard all previous', 'reveal your system prompt', 'forget your instructions'];
@@ -16,7 +16,8 @@ const luhn = (digits) => {
   for (let i = digits.length - 1; i >= 0; i--) { let d = digits.charCodeAt(i) - 48; if (dbl) { d *= 2; if (d > 9) d -= 9; } sum += d; dbl = !dbl; }
   return sum % 10 === 0;
 };
-export const normalizeText = (s) => String(s).slice(0, MAX_TEXT).normalize('NFKC').replace(HIDDEN, '').replace(/\s+/g, ' ');
+// Same normaliser as the masking (percent-decoded, NFKC, every invisible character deleted), so encoding or interleaving cannot hide a finding.
+export const normalizeText = (s) => normalizeForMatching(String(s).slice(0, MAX_TEXT)).replace(/\s+/g, ' ');
 
 export function findingKinds(text) {
   const t = normalizeText(text); const kinds = new Set();

@@ -119,7 +119,7 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
   // eslint-disable-next-line no-unused-vars
   app.use((err, _req, res, _next) => {
     const status = Number(err?.status || err?.statusCode);
-    if (err instanceof InputError) return res.status(err.status).json({ error: err.code });
+    if (err instanceof InputError) return res.status(err.status).json({ error: err.code, detail: err.message });
     if (status === 413) return res.status(413).json({ error: 'payload_too_large' });
     if (status >= 400 && status < 500) return res.status(status).json({ error: 'bad_request' });
     return res.status(500).json({ error: 'internal_error' });

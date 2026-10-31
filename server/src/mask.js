@@ -2,16 +2,19 @@
 // forgot to clean its input. Iterative: a deep structure cannot overflow the stack. The generic long-blob detector is NOT applied here
 // (ids, hashes and trace ids are long and legitimate); the specific token, key, bearer and assignment detectors are. Visitor text is
 // already fully cleaned (long blobs included) on the way in by cleanFree.
-import { DETECTORS, maskSpans } from './credentials.js';
+import { DETECTORS, maskSpans, normalizeForMatching } from './credentials.js';
 
 const SPECIFIC = DETECTORS.filter((d) => !d.generic);
 // labToken: only the mint answer carries one, signed by the lab's own throwaway key and labelled mock-issued.
 const OPAQUE = new Set(['hash', 'callHash', 'traceparent', 'traceId', 'labToken']);
 
+// The text is matched in its NORMALISED form (percent-decoded, NFKC, invisible characters deleted), so interleaving or encoding cannot hide a credential. When nothing is
+// found the original text is returned untouched (ids and hashes stay as they are); when something is found the masked, normalised text is returned.
 export function maskResponseText(text) {
+  const flat = normalizeForMatching(text);
   const spans = [];
-  for (const d of SPECIFIC) { d.re.lastIndex = 0; for (const m of text.matchAll(d.re)) spans.push({ start: m.index, end: m.index + m[0].length, id: d.id }); }
-  return spans.length ? maskSpans(text, spans) : text;
+  for (const d of SPECIFIC) { d.re.lastIndex = 0; for (const m of flat.matchAll(d.re)) spans.push({ start: m.index, end: m.index + m[0].length, id: d.id }); }
+  return spans.length ? maskSpans(flat, spans) : text;
 }
 
 export function maskDeep(value) {

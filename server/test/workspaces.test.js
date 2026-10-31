@@ -21,13 +21,23 @@ test('engines are per workspace and per vertical, created on first use, and rese
   assert.equal(w.peek('a', 'finance'), null); assert.equal(w.peek('b', 'finance'), b);
 });
 
-test('the store expires old workspaces and caps their count', () => {
+test('the store never evicts: at the cap a NEW id is refused (503), existing ids keep working, and only an idle workspace expires', () => {
   let t = 0;
   const w = createWorkspaces({ max: 3, ttlMs: 100, now: () => t });
-  for (const id of ['a', 'b', 'c', 'd']) w.engine(id, 'finance', C);
+  const a = w.engine('a', 'finance', C);
+  for (const id of ['b', 'c']) w.engine(id, 'finance', C);
   assert.equal(w.size(), 3);
-  assert.equal(w.peek('a', 'finance'), null, 'the oldest is dropped');
-  t = 500;
-  assert.equal(w.peek('d', 'finance'), null);
-  assert.equal(w.size(), 0);
+  assert.throws(() => w.engine('d', 'finance', C), (e) => e.status === 503 && e.code === 'workspaces_full');
+  assert.throws(() => w.engine('e', 'finance', C), (e) => e.status === 503);
+  assert.equal(w.peek('a', 'finance'), a, 'nothing was evicted');
+  assert.equal(w.engine('a', 'health', VERTICALS.health) !== a, true, 'an existing workspace can still open another vertical');
+  assert.equal(w.size(), 3);
+  assert.equal(w.peek('d', 'finance'), null, 'a refused id left nothing behind');
+  w.reset('b'); assert.equal(w.size(), 2); w.engine('d', 'finance', C); assert.equal(w.size(), 3, 'a Reset frees a slot');
+  t = 90; w.engine('a', 'finance', C);  // a is touched, so it is no longer idle
+  t = 150;
+  assert.equal(w.peek('a', 'finance'), a, 'a recently used workspace stays');
+  assert.equal(w.peek('c', 'finance'), null, 'an idle one expires');
+  assert.equal(w.size(), 1);
+  w.engine('x', 'finance', C); assert.equal(w.size(), 2, 'idle expiry freed slots');
 });

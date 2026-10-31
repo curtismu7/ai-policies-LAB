@@ -16,7 +16,7 @@ import { InputError, refuse } from './errors.js';
 import { buildCatalog, hasApp, hasTool, parseRoute, SURFACES, CHANNELS } from './catalog.js';
 import { buildRoster } from './cast.js';
 import { callHash, canonicalJson, METHODS, normalizeArguments } from './canon.js';
-import { cleanFree, findCredentials } from './credentials.js';
+import { cleanFree, cleanUnderKey, findCredentials, isCredentialKey, looksLikeCredential, normalizeForMatching } from './credentials.js';
 import { findingKinds, findingsIn, normalizeText } from './inspect.js';
 import { defaultPolicy, validateLayer, LAYERS, OPS } from './policies.js';
 import { mint, verifyToken, MAX_TTL_MIN } from './token.js';
@@ -84,13 +84,13 @@ export class Engine {
     if (keys.length > LIMITS.claims) throw refuse('too_many_claims', `a token carries at most ${LIMITS.claims} claims`);
     const claims = {};
     for (const k of keys) {
-      if (!/^[a-z][a-z0-9_]{0,39}$/.test(k) || findCredentials(k).length) throw refuse('bad_claim_name', 'a claim name is lowercase letters, digits and underscores, starting with a letter');
+      if (!/^[a-z][a-z0-9_]{0,39}$/.test(k) || looksLikeCredential(k) || isCredentialKey(k)) throw refuse('bad_claim_name', 'a claim name is lowercase letters, digits and underscores, starting with a letter, and is not a credential word (the lab never puts a credential in a token)');
       if (['iss', 'aud', 'iat', 'nbf', 'exp'].includes(k)) throw refuse('reserved_claim', 'iss, aud, iat, nbf and exp are set by the lab\'s issuer');
       const v = p.claims[k];
       const clean = (x) => {
         if (typeof x !== 'string') return x;
         if (x.length > LIMITS.claimString) throw refuse('claim_too_long', `a claim string is at most ${LIMITS.claimString} characters`);
-        if (findCredentials(x).length) throw refuse('credential_shaped', 'a claim value looks like a credential; the lab never puts one in a token');
+        if (looksLikeCredential(x)) throw refuse('credential_shaped', 'a claim value looks like a credential; the lab never puts one in a token');
         return cleanFree(x, LIMITS.claimString);
       };
       if (Array.isArray(v)) { if (v.length > LIMITS.claimItems || !v.every((x) => scalar(x) && (typeof x !== 'number' || Number.isFinite(x)))) throw refuse('bad_claim_value', `a claim is a string, number, boolean or a list of at most ${LIMITS.claimItems} of them`); claims[k] = v.map(clean); }
@@ -349,12 +349,19 @@ export class Engine {
           c.grant = this.approvals.find((a) => a.status === 'approved' && !this.grantProblem(a, ctx2, rule)) || null;
         }
         if (c.grant) return pass(`approval ${c.grant.ref} applies as an input to this evaluation (${c.grant.bound.kind === 'call' ? 'single-use, bound to this exact call' : 'a fixed period'}); it lifted the hold and nothing above it`, { ...detail, grant: c.grant.ref });
-        // nothing usable: open (or re-use) a request, and refuse NOW; nothing is held open
+        // nothing usable. LAB READING (not the deck's order): a hold that request inspection would refuse on every retry is never opened. It is the same idea as the
+        // unfillable-hold refusal below: a flow that can never complete is refused now, instead of opening an approval nobody can usefully sign. The findings are shown
+        // by kind only, and nothing the visitor typed is stored or echoed.
+        const ahead = findingsIn(args);
+        const aheadKinds = [...new Set(ahead.map((f) => f.kind))];
+        const refusing = this.policy.inspection.find((r) => r.stage === 'request' && aheadKinds.includes(r.finding));
+        if (refusing) { d.findings.push(...aheadKinds.map((k) => ({ stage: 'request', kind: k }))); return deny('inspection_would_refuse', `held calls are not opened when request inspection would refuse the retry (finding ${refusing.finding}, rule ${refusing.id}): nothing was opened for a person. This is a lab reading, not the deck's order`, { ...detail, findings: aheadKinds, rule: refusing.id }); }
+        // open (or re-use) a request, and refuse NOW; nothing is held open
         const eligible = this.eligibleApprovers({ roles: need.roles, minAuthLevel: need.minAuthLevel }, [c.requester, c.endUser].filter(Boolean));
         if (eligible.length < need.approvers) return deny('hold_unfillable', 'this hold could never complete: too few people could sign it (the person the call acts for may not approve their own call)', { ...detail, eligible: eligible.length, required: need.approvers });
         let a = this.approvals.find((x) => x.status === 'pending' && x.requester === c.requester && x.app === c.app && x.tool === tool && x.ruleId === rule.id && (x.bound.kind === 'period' || x.bound.callHash === c.hash));
         const reused = !!a;
-        a ||= this.newApproval({ requester: c.requester, identity: c.identity, endUser: c.endUser, app: c.app, tool, hash: c.hash }, rule, cleanFree(`${tool} on ${c.app}: ${canonicalJson(args)}`, 300));
+        a ||= this.newApproval({ requester: c.requester, identity: c.identity, endUser: c.endUser, app: c.app, tool, hash: c.hash }, rule, `${tool} on ${c.app}: arguments ${Object.keys(args).slice(0, 12).map((k) => cleanFree(k, 40)).join(', ') || '(none)'}; call hash ${c.hash.slice(0, 16)}`);
         d.approval = { ref: a.ref, status: a.status, expiresAt: a.expiresAt, bound: a.bound, approvers: a.required.approvers, roles: a.required.roles, minAuthLevel: a.required.minAuthLevel, channel: a.required.channel, reused, signatures: a.approvals.length };
         return { verdict: 'hold', code: 'hold_for_approval', reason: `held for a person: refused now with a reference and an owning expiry, nothing is held open. An approver signs, then call again.`, detail: { ...detail, approval: a.ref } };
       },
@@ -431,14 +438,13 @@ export class Engine {
 // The text the page shows for the canonical form: as it is hashed, unless it hides a credential-shaped value (zero-width characters interleaved, say): then
 // the masked copy is shown instead. Masked BEFORE it is cut.
 export function shown(text, max) {
-  const flat = text.normalize('NFKC').replace(/[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g, '');
-  return findCredentials(flat).length ? cleanFree(text, max) : text.slice(0, max);
+  return findCredentials(normalizeForMatching(text)).length ? cleanFree(text, max) : text.slice(0, max);
 }
 
 // The claims as shown on the page: only well-known claim values are shown as they are, the rest as types; credential-shaped strings never reach here (mint refuses them).
 function summariseClaims(cl) {
   const out = {};
-  for (const k of Object.keys(cl).slice(0, 30)) { const v = cl[k]; out[k.slice(0, 40)] = typeof v === 'string' ? cleanFree(v, 120) : v; }
+  for (const k of Object.keys(cl).slice(0, 30)) { const v = cl[k]; out[k.slice(0, 40)] = cleanUnderKey(k, v, 120); }
   return out;
 }
 export { normalizeText };

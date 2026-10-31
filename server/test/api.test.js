@@ -76,7 +76,7 @@ test('the full cycle over HTTP: mint, hold, a wrong approver, a right one, retry
     assert.match(first.hops[0].request.headers.traceparent, /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
     assert.ok(first.hops.every((h) => /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/.test(h.request.headers.traceparent)));
     assert.ok(first.hops.some((h) => /outbox/.test(h.label)) && first.hops.some((h) => /token check/.test(h.label)));
-    assert.equal(first.hops[0].request.body.token, '[masked:jwt]', 'the token is masked in the hop pane');
+    assert.equal(first.hops[0].request.body.token, '[masked:keyed-value]', 'the token is masked in the hop pane (its key is a credential word)');
     const dec = (approver, authLevel = 2, decision = 'approve') => post(url, '/api/approvals/apr-0001/decision', live({ decision: { approver, decision, authLevel } }));
     const self = await dec(C.castUser); assert.equal(self.status, 403); assert.equal((await self.json()).error, 'self_approval');
     assert.equal((await dec(C.castSecurity, 3)).status, 403);
@@ -172,3 +172,25 @@ test('Host and same-origin checks hold on the real server', async () => {
   });
 });
 test('ZERO outbound: the netguard recorded no attempt across all of the above', () => { assert.deepEqual(guard.attempts, []); });
+
+test('WORKSPACE CAP: a flood of new ids is refused (503, fixed JSON) and never evicts anyone; existing workspaces keep working; Reset frees a slot', async () => {
+  const { createWorkspaces } = await import('../src/workspaces.js');
+  await withServer(async (url, { workspaces }) => {
+    const t = await mint(url, cl(), 'cap-0');
+    assert.equal((await evalReq(url, holdReq(t), 'cap-0')).status, 403);
+    const flood = await Promise.all(Array.from({ length: 24 }, (_, i) => post(url, '/api/clock', live({ clock: { minutes: 1 } }), W(`flood-${i}`))));
+    const codes = flood.map((r) => r.status);
+    assert.equal(codes.filter((c) => c === 200).length, 3, 'only the free slots were given out');
+    assert.equal(codes.filter((c) => c === 503).length, 21);
+    const refused = await flood.find((r) => r.status === 503).json();
+    assert.equal(refused.error, 'workspaces_full'); assert.match(refused.detail, /maximum of 4 workspaces/);
+    assert.equal(workspaces.size(), 4);
+    const st = (await json(await get(url, '/api/state?mode=live', W('cap-0')))).state;
+    assert.equal(st.approvals.length, 1, 'the first visitor\'s state was not wiped by the flood');
+    assert.equal((await post(url, '/api/clock', live({ clock: { minutes: 1 } }), W('cap-0'))).status, 200, 'an existing workspace still works');
+    assert.equal((await post(url, '/api/clock', live({ clock: { minutes: 1 } }), W('brand-new'))).status, 503);
+    assert.equal((await json(await get(url, '/api/state?mode=live', W('brand-new')))).state.clock.minutesSinceStart, 0, 'a read never creates or refuses');
+    assert.equal((await post(url, '/api/reset', {}, W('flood-0'))).status, 200);
+    assert.equal((await post(url, '/api/clock', live({ clock: { minutes: 1 } }), W('brand-new'))).status, 200, 'a Reset freed a slot');
+  }, { workspaces: createWorkspaces({ max: 4 }) });
+});

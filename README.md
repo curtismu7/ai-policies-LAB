@@ -42,8 +42,14 @@ The deck gives claims; our own notes give measured behaviour on our tenant; the 
 - A hold that could never complete (too few eligible people, the person the call acts for never counts) is refused instead of opened.
 - Numbers in the arguments must be exact in a double: at most 15 significant digits with a fraction or exponent, and whole numbers up to 2^53 - 1. Arguments are at most 4096 characters, nesting 6, 40 keys per object, 50 items per array, 400 values, strings of 1000 characters; a call that breaks a limit is denied, never truncated. Credential-shaped text is masked by a lab-written heuristic that does not find every secret, so do not type a real one.
 - A token is at most 4096 characters and lives 1 to 1440 lab minutes; a policy layer holds at most 30 rules; a workspace keeps at most 200 approvals, 500 audit entries and 300 outbox entries (a full workspace refuses new work: Reset); the clock moves forward only, 1 to 10080 minutes per move; one answer shows at most 40 hops.
-- State is per `X-Workspace` id, 500 workspaces and one hour of age at most. An id that looks like a credential is refused, never echoed.
+- State is per `X-Workspace` id. **At the cap nothing is ever evicted:** the lab holds at most 500 workspaces; a NEW id at the cap is refused with HTTP 503 `workspaces_full` (fixed JSON), existing workspaces keep working and keep all their state, a Reset of your own workspace frees its slot, and a workspace untouched for an hour expires and frees one too. Flooding the lab with new ids can therefore refuse newcomers but cannot wipe anyone (a test creates ids in parallel). An id that looks like a credential is refused, never echoed.
 - The lab has no sign-in: you choose who acts and which authentication level they signed with, so you can try the wrong person.
+- **LAB READING, not the deck's order:** a held call that request inspection would refuse on every retry is never opened (`inspection_would_refuse`: no approval, no outbox row). It is the same idea as refusing an unfillable hold: a flow that can never complete is refused now. The deck puts inspection after the hold; the lab does not open an approval nobody can usefully sign.
+- An approval request stores the argument NAMES and the call hash, never the values (the hash is over the real arguments, which are not kept).
+- Keys sent twice inside an arguments OBJECT of an HTTP request body are resolved last-wins by the JSON body parser before the lab sees them (a duplicate cannot be seen after that). Send the arguments as text (`argumentsText`, which the Evaluate tab does) and duplicate keys are refused.
+- A lab fault injected into the token stage answers 403, not 401: the fault stands for an evaluation error inside the stage, not for a token that failed to verify.
+- The Mock drift test regenerates the table from the same Engine; a second test replays every scripted step through the real Live HTTP API in all three verticals and compares the results with the table.
+- **Masking is a heuristic, with stated limits.** Free text, claim values, argument values and every answer pass one normaliser before matching: percent-decoded up to three rounds, NFKC, every invisible and format character deleted (`\p{Default_Ignorable_Code_Point}`, `\p{Cf}`, U+FFFD), control characters turned into spaces, backslashes before quotes dropped. Then a credential word as a key masks its value in any quoting (`"password":"x"`, `'pin' = x`, `userPassword: x`), assignments (`password: x`, `my password is x`) stop at a quote, comma, semicolon or brace so adjacent ones each match, and tokens, keys, JWTs, bearer values, URL passwords and key blocks are found by shape. NOT masked: a bare `keyword value` with no colon, equals or "is" (`password Tr0ub4dor`: too many false positives on prose), a short random password with no keyword before it, a password containing a comma, quote or brace (only the part before it is masked), and anything split by characters that are not invisible. A value is shown decoded when it was encoded. Do not type a real secret.
 
 ## Run from a clone
 
@@ -113,7 +119,7 @@ npm test    # server (node --test), web (vitest, drives the UI against the real 
 
 The shared checks are run by hand, because the scripts are not shipped into this repo's CI: `bash <AI-DEMO-Standalone>/scripts/check-drift.sh .`, `bash <AI-DEMO-Standalone>/scripts/check-css.sh .` and `node <demo-kit-base>/scripts/conformance.mjs . --new`.
 
-On Node 26: 234 tests pass (195 server, 16 web, 23 scripts).
+On Node 26: 250 tests pass (211 server, 16 web, 23 scripts).
 
 ## Troubleshooting
 

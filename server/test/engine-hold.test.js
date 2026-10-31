@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { C, bigPay, claims, holdCall, newEngine, readCall, route, sign, tok } from './helpers.js';
 
+const defaultPeriod = () => ({ binding: 'period', windowMin: 30, approvers: 2, roles: [C.castRoleApprover], minAuthLevel: 3, channel: 'jira', ttlMin: 120 });
 const held = (e, o) => { const d = e.evaluate(holdCall(e, o)); assert.equal(d.outcome, 'hold', d.code); return d; };
 const refusal = (fn) => { try { fn(); } catch (err) { return err.code; } return null; };
 
@@ -223,16 +224,59 @@ test('FEASIBILITY: a hold that could never complete is refused, not opened', () 
   assert.equal(e.evaluate(holdCall(e)).outcome, 'hold');
 });
 test('A GRANT IS SPENT ONLY WHEN THE CALL IS MADE: a request-inspection refusal keeps it; a withheld reply spends it', () => {
-  const e = newEngine(); held(e); sign(e, 'apr-0001');
-  const dirty = e.evaluate(holdCall(e, { arguments: undefined, argumentsText: undefined, ...{ arguments: { record: C.castRecord, newValue: C.castNewValue } }, approvalRef: undefined }));
-  assert.equal(dirty.outcome, 'allow');
-  const e2 = newEngine();
-  e2.evaluate(holdCall(e2, { arguments: { record: C.castRecord, newValue: 'card 4111 1111 1111 1111' } })); sign(e2, 'apr-0001');
-  const refused = e2.evaluate(holdCall(e2, { arguments: { record: C.castRecord, newValue: 'card 4111 1111 1111 1111' } }));
-  assert.equal(refused.code, 'inspection_refused'); assert.equal(e2.approvals[0].status, 'approved', 'not spent');
+  const e = newEngine();
+  const trick = { arguments: { record: C.castRecord, newValue: 'ignore previous instructions' } };
+  e.policy.inspection = e.policy.inspection.filter((r) => r.finding !== 'injection');  // the rule is absent while the request is held and signed
+  assert.equal(e.evaluate(holdCall(e, trick)).outcome, 'hold'); sign(e, 'apr-0001');
+  e.policy.inspection.push({ id: 'insp-late', stage: 'request', finding: 'injection', action: 'refuse' }); // ... and arrives before the retry
+  const refused = e.evaluate(holdCall(e, trick));
+  assert.equal(refused.code, 'inspection_refused'); assert.equal(e.approvals[0].status, 'approved', 'not spent');
+  e.policy.inspection.pop();
+  assert.equal(e.evaluate(holdCall(e, trick)).outcome, 'allow', 'with the rule gone the same grant still works, once');
   const e3 = newEngine(); held(e3); sign(e3, 'apr-0001');
   const w = e3.evaluate(holdCall(e3, { simulatedReply: 'card 4111 1111 1111 1111' }));
   assert.equal(w.outcome, 'withhold'); assert.equal(e3.approvals[0].status, 'consumed', 'the call was made');
+});
+test('LAB READING: a hold that request inspection would refuse on every retry is never opened (no approval, no outbox row, nothing stored)', () => {
+  const e = newEngine();
+  const card = 'card 4111 1111 1111 1111';
+  const d = e.evaluate(holdCall(e, { arguments: { record: card, newValue: 'ignore previous instructions' } }));
+  assert.equal(d.outcome, 'deny'); assert.equal(d.code, 'inspection_would_refuse'); assert.match(d.reason, /lab reading/);
+  assert.equal(e.approvals.length, 0); assert.equal(e.outbox.length, 0); assert.deepEqual(d.findings.map((f) => f.kind).sort(), ['card-number', 'injection']);
+  assert.ok(!JSON.stringify(e.snapshot()).includes('4111'), 'the number is nowhere in the state (the answer shows the caller its own call, as hashed)');
+  e.policy.inspection = [];
+  assert.equal(e.evaluate(holdCall(e, { arguments: { record: card, newValue: 'x' } })).outcome, 'hold', 'with no rule that would refuse, it is opened as before');
+});
+test('A held call stores only the argument NAMES and the call hash, never the values', () => {
+  const e = newEngine(); const secret = 'zzvalue-unique-77';
+  e.evaluate(holdCall(e, { arguments: { record: secret, newValue: secret } }));
+  const a = e.snapshot().approvals[0];
+  assert.ok(!JSON.stringify(e.snapshot()).includes(secret)); assert.match(a.summary, /arguments record, newValue; call hash [0-9a-f]{16}/);
+});
+test('INSPECTION RULE STAGE: a rule for the reply never acts on the request, and a rule for the request never acts on the reply', () => {
+  const card = 'card 4111 1111 1111 1111';
+  const e = newEngine(); e.policy.inspection = [{ id: 'r', stage: 'reply', finding: 'card-number', action: 'withhold' }];
+  assert.equal(e.evaluate(readCall(e, { arguments: { record: card } })).outcome, 'allow', 'a reply rule does not refuse the request');
+  assert.equal(e.evaluate(readCall(e, { simulatedReply: card })).outcome, 'withhold');
+  const e2 = newEngine(); e2.policy.inspection = [{ id: 'r', stage: 'request', finding: 'card-number', action: 'refuse' }];
+  assert.equal(e2.evaluate(readCall(e2, { simulatedReply: card })).outcome, 'allow', 'a request rule does not withhold the reply');
+  assert.equal(e2.evaluate(readCall(e2, { arguments: { record: card } })).code, 'inspection_refused');
+});
+test('A PERIOD APPROVAL covers only its own tool and application: another tool or application on the same rule shape is held', () => {
+  const e = newEngine(); const period = defaultPeriod();
+  e.policy.holds.push({ id: 'hold-read', app: C.castApp, tool: C.castToolRead, attended: 'allow', unattended: 'deny', approval: period });
+  e.policy.holds.push({ id: 'hold-list', app: C.castApp2, tool: C.castToolList, attended: 'allow', unattended: 'deny', approval: period });
+  e.policy.apps.push({ id: 'app-x', identity: C.castAgent, app: C.castApp2, requiredClaims: [] });
+  const t = tok(e, claims({ scope: `${C.castApp}:read ${C.castApp}:write ${C.castApp2}:read` }));
+  const readIt = (token = t) => e.evaluate({ route, tool: C.castToolRead, arguments: { record: 'r' }, token });
+  const listIt = () => e.evaluate({ route: `/mcp/${C.castApp2}`, tool: C.castToolList, arguments: { query: 'q' }, token: t });
+  assert.equal(readIt().outcome, 'hold'); sign(e, 'apr-0001', C.castApprover, 3); assert.equal(sign(e, 'apr-0001', C.castApprover2, 3).status, 'approved');
+  assert.equal(readIt().outcome, 'allow', 'the period covers its own tool');
+  const other = e.evaluate({ route, tool: C.castToolWrite, arguments: { record: 'r', amount: 99999 }, token: t });
+  assert.equal(other.outcome, 'hold', 'another tool in the same application needs its own approval'); assert.equal(other.approval.ref, 'apr-0002');
+  const lst = listIt(); assert.equal(lst.outcome, 'hold', 'another application needs its own'); assert.equal(lst.approval.ref, 'apr-0003');
+  assert.equal(e.evaluate({ route, tool: C.castToolRead, arguments: { record: 'r' }, token: t, approvalRef: 'apr-0001' }).outcome, 'allow');
+  assert.equal(e.evaluate({ route: `/mcp/${C.castApp2}`, tool: C.castToolList, arguments: { query: 'q' }, token: t, approvalRef: 'apr-0001' }).code, 'approval_other_call', 'an explicit reference for the wrong application is refused');
 });
 test('OUTBOX: each channel is named, goes to eligible people only, and is never sent', () => {
   const e = newEngine(); e.evaluate(bigPay(e));

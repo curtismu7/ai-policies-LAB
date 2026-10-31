@@ -21,7 +21,11 @@ export const DETECTORS = [
   D('token-word', /\btoken\s+(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{12,}/gi),
   // a passphrase is several words: take the next four
   D('passphrase', /\bpassphrase\s*(?:[:=]|\bis\b)\s*\S+(?:[ \t]+\S+){0,3}/gi),
-  D('assignment', /\b(?:password|passwd|pwd|pw|pass|secret(?:[ _-]?key)?|token|api[_-]?key|apikey|client[_-]?secret|private[_-]?key|access[_-]?key|account[_-]?key|session[_-]?id|sessionid|credential)s?\s*(?:[:=]|\bis\b)\s*\S{3,}/gi),
+  // keyword, then ":" "=" or "is", then a value that stops at a quote, a comma, a semicolon or a brace, so adjacent assignments each match
+  D('assignment', /\b(?:password|passwd|pwd|pw|pass|passcode|secret(?:[ _-]?key)?|token|api[_-]?key|apikey|client[_-]?secret|private[_-]?key|access[_-]?key|account[_-]?key|session[_-]?id|sessionid|credential|authorization)s?\s*(?:[:=]|\bis\b)\s*[^\s"',;{}\[\]]{3,}/gi),
+  // KEY-AWARE: when a key is itself a credential word (also as a suffix: userPassword, db_secret), its VALUE is masked whatever the quoting ("password":"x", 'pin' = x,
+  // password : "x y"). Only the value is covered. Plural only for password and secret, so "max_tokens": 4096 is left alone.
+  D('keyed-value', /(?<=(?:passwords?|passwd|passcode|secrets?|token|api[_-]?key|apikey|private[_-]?key|access[_-]?key|account[_-]?key|client[_-]?secret|credential|authorization|session[_-]?id|sessionid|\b(?:pwd|pw|pass|pin|auth))["']?\s{0,10}[:=]\s{0,10})(?:"(?:[^"\\\n]|\\.){1,200}"|'[^'\n]{1,200}'|[^\s,;{}\[\]"']{1,200})/gi),
   // A long run of key characters. Two detectors, both checked in code rather than with a look-ahead (to stay linear): a run of 20 or more of
   // letters, digits, _ and - that has both a letter and a digit (or is 32 or more and is not just lowercase words joined by hyphens), and a run of 32 or
   // more that also uses + / = (base64) unless it is a lowercase path such as a URL path.
@@ -30,6 +34,25 @@ export const DETECTORS = [
 ];
 
 const MAX_SCAN = 200000;
+
+// ONE normaliser for everything that matches text against the detectors (cleanFree, the response mask, the canonical-form display): the text is cut to a bounded
+// length, then up to three rounds of percent-decoding (an encoded or double-encoded credential), NFKC (fullwidth look-alikes), deletion of every invisible and
+// format character (\p{Default_Ignorable_Code_Point}, \p{Cf}, U+FFFD, which a person reads as nothing but which breaks a pattern apart), control characters become spaces,
+// and backslashes before a quote are dropped (so JSON text that was itself put inside a JSON string, \"password\":\"x\", still reads as a key and a value).
+const INVISIBLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}\uFFFD]/gu;
+const PERCENT_RUN = /(?:%[0-9a-fA-F]{2})+/g;
+function percentDecode(s) {
+  for (let i = 0; i < 3 && s.includes('%'); i++) {
+    const next = s.replace(PERCENT_RUN, (run) => { try { return decodeURIComponent(run); } catch { return run; } });
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+export function normalizeForMatching(value) {
+  const cut = String(value ?? '').slice(0, MAX_SCAN);
+  return percentDecode(cut).replace(INVISIBLE, '').normalize('NFKC').replace(INVISIBLE, '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\\+(?=["'])/g, '');
+}
 // Spans { start, end, id } of every credential-shaped run in the text.
 export function findCredentials(text) {
   const t = String(text).slice(0, MAX_SCAN);
@@ -37,6 +60,14 @@ export function findCredentials(text) {
   for (const d of DETECTORS) { d.re.lastIndex = 0; for (const m of t.matchAll(d.re)) if (!d.accept || d.accept(m[0])) spans.push({ start: m.index, end: m.index + m[0].length, id: d.id }); }
   return spans;
 }
+
+// Is this object KEY a credential word (exact for the short ones, a suffix for the long ones)? Used where a value is shown on its own, away from its key.
+export const isCredentialKey = (key) => /^(?:pwd|pw|pass|pin|auth)$|(?:passwords?|passwd|passcode|secrets?|token|api[_-]?key|apikey|private[_-]?key|access[_-]?key|account[_-]?key|credential|authorization|session[_-]?id|sessionid)$/i.test(normalizeForMatching(key).trim());
+// A value shown beside its key: masked whole when the key is a credential word, otherwise cleaned as free text.
+export const cleanUnderKey = (key, value, max) => (isCredentialKey(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') ? '[masked:keyed-value]' : typeof value === 'string' ? cleanFree(value, max) : value);
+
+// True when the text, once normalised, holds anything credential-shaped (used to refuse ids, claim values and rule values rather than mask them).
+export const looksLikeCredential = (text) => findCredentials(normalizeForMatching(text)).length > 0;
 
 export function maskSpans(text, spans) {
   const sorted = spans.filter((s) => s.end > s.start).sort((a, b) => a.start - b.start || b.end - a.end);
@@ -50,11 +81,8 @@ export function maskText(input) {
   return text ? maskSpans(text, findCredentials(text)) : text;
 }
 
-// Free text from the visitor: zero-width and bidi characters DELETED (so a token cannot be hidden by interleaving them), other control characters
-// turned into spaces, credential-shaped runs masked, and only THEN cut to length (a token that straddles the cut is masked, not half shown).
+// Free text from the visitor: normalised (see normalizeForMatching: percent-decoded, NFKC, every invisible character deleted, control characters turned into
+// spaces), credential-shaped runs masked, and only THEN cut to length (a token that straddles the cut is masked, not half shown).
 export function cleanFree(value, max = MAX_FREE) {
-  const flat = String(value ?? '').slice(0, MAX_SCAN).normalize('NFKC') // fullwidth look-alikes become the ASCII they imitate
-    .replace(/[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g, '')
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
-  return maskText(flat).replace(/\s+/g, ' ').trim().slice(0, max);
+  return maskText(normalizeForMatching(value)).replace(/\s+/g, ' ').trim().slice(0, max);
 }
