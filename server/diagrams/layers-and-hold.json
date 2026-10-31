@@ -1,0 +1,199 @@
+{
+  "schema": "diagram-studio/1",
+  "id": "layers-and-hold",
+  "title": "One call: four layers, then allow, hold or block",
+  "lede": "A call arrives with a token. The token is verified, four scope checks read only the verified claims, and policy is asked two questions: may this proceed attended, may it proceed unattended. Allow-then-deny holds the call for a person: it is refused at once, an approver signs, and the retry proceeds. Ping release claim, UNVERIFIED on our tenant. Simulated.",
+  "groups": {
+    "client": {
+      "label": "Caller",
+      "color": "dark"
+    },
+    "gateway": {
+      "label": "Privilege gateway",
+      "color": "red"
+    },
+    "policy": {
+      "label": "Policy and approvers",
+      "color": "blue"
+    },
+    "upstream": {
+      "label": "Upstream",
+      "color": "grey"
+    }
+  },
+  "nodes": [
+    {
+      "id": "agent",
+      "label": "Agent ({{castAgent}}) acting for {{castUser}}",
+      "group": "client",
+      "x": 0,
+      "y": 300
+    },
+    {
+      "id": "gw",
+      "label": "Gateway: token verified (RS256)",
+      "group": "gateway",
+      "x": 400,
+      "y": 0
+    },
+    {
+      "id": "layers",
+      "label": "Four scope checks: surface, application, action, end user",
+      "group": "gateway",
+      "x": 800,
+      "y": 0
+    },
+    {
+      "id": "pair",
+      "label": "Attended? Unattended?",
+      "group": "policy",
+      "x": 800,
+      "y": 300
+    },
+    {
+      "id": "approver",
+      "label": "Approver: Slack DM, Ping push, Jira or ServiceNow",
+      "group": "policy",
+      "x": 400,
+      "y": 600
+    },
+    {
+      "id": "inspect",
+      "label": "Inspection: request, then reply",
+      "group": "gateway",
+      "x": 1200,
+      "y": 300
+    },
+    {
+      "id": "tool",
+      "label": "Tool on {{castApp}} (simulated)",
+      "group": "upstream",
+      "x": 1200,
+      "y": 0
+    }
+  ],
+  "edges": [
+    {
+      "source": "agent",
+      "target": "gw",
+      "label": "Call with a token"
+    },
+    {
+      "source": "gw",
+      "target": "layers",
+      "label": "Verified claims only"
+    },
+    {
+      "source": "layers",
+      "target": "pair",
+      "label": "All four pass"
+    },
+    {
+      "source": "pair",
+      "target": "agent",
+      "label": "Hold: refused now, reference and expiry"
+    },
+    {
+      "source": "pair",
+      "target": "approver",
+      "label": "Request to approvers"
+    },
+    {
+      "source": "approver",
+      "target": "pair",
+      "label": "Signs: bound to the exact call"
+    },
+    {
+      "source": "agent",
+      "target": "pair",
+      "label": "Retry: the grant is an input"
+    },
+    {
+      "source": "pair",
+      "target": "inspect",
+      "label": "Allowed: call made"
+    },
+    {
+      "source": "inspect",
+      "target": "tool",
+      "label": "Request examined, forwarded"
+    },
+    {
+      "source": "tool",
+      "target": "inspect",
+      "label": "Reply examined"
+    }
+  ],
+  "steps": [
+    {
+      "title": "Call with a token",
+      "what": "{{castAgent}} calls {{castToolHold}} on {{castApp}} for {{castUser}}, presenting a token. The surface is derived from the route, not from anything the caller says.",
+      "edges": [
+        0
+      ]
+    },
+    {
+      "title": "The token is verified",
+      "what": "The signature, issuer, audience and lifetime are checked. From here on only the verified claims are read.",
+      "edges": [
+        1
+      ]
+    },
+    {
+      "title": "Four scope checks pass",
+      "what": "Surface (the identity caps the key), application and required claims, action scope, and the end user, in that order. Each can stop the call.",
+      "edges": [
+        2
+      ]
+    },
+    {
+      "title": "Hold: refused now",
+      "what": "Allowed attended, refused unattended: a hold. The call is refused at once with a reason, a reference and an owning expiry. Nothing is held open.",
+      "edges": [
+        3
+      ]
+    },
+    {
+      "title": "The request goes to approvers",
+      "what": "A Slack DM, a Ping push or a ticket (simulated outbox, never sent) reaches people who hold the named role.",
+      "edges": [
+        4
+      ]
+    },
+    {
+      "title": "An approver signs",
+      "what": "Single-use and bound to the canonical hash of method, target and arguments, or to a fixed period; the number of approvers, roles and minimum sign-in strength are checked.",
+      "edges": [
+        5
+      ]
+    },
+    {
+      "title": "The agent retries",
+      "what": "The same call again. The grant is an input to this evaluation: it lifts the hold, and nothing above it.",
+      "edges": [
+        6
+      ]
+    },
+    {
+      "title": "Allowed: the call is made",
+      "what": "The attended form is satisfied and the grant is spent (single-use) or counted (period).",
+      "edges": [
+        7
+      ]
+    },
+    {
+      "title": "The request is examined",
+      "what": "Rules that read inspection findings can refuse the call here. They cannot hold it.",
+      "edges": [
+        8
+      ]
+    },
+    {
+      "title": "The reply is examined",
+      "what": "A finding on the reply can withhold the result. It cannot hold it either.",
+      "edges": [
+        9
+      ]
+    }
+  ]
+}

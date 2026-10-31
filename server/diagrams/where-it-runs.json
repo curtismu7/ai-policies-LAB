@@ -1,0 +1,189 @@
+{
+  "schema": "diagram-studio/1",
+  "id": "where-it-runs",
+  "title": "Where it can run: a hold only before the call",
+  "lede": "A hold can only happen before the call is made. Rules that read inspection findings run after the request has been examined or after the reply has come back: refuse the call, or withhold the result. There is no arrow from either inspection to a hold, because neither can pause for a person. Ping release claim, UNVERIFIED on our tenant. Simulated.",
+  "groups": {
+    "client": {
+      "label": "Caller",
+      "color": "dark"
+    },
+    "gateway": {
+      "label": "Privilege gateway",
+      "color": "red"
+    },
+    "policy": {
+      "label": "Policy and approvers",
+      "color": "blue"
+    },
+    "upstream": {
+      "label": "Upstream",
+      "color": "grey"
+    }
+  },
+  "nodes": [
+    {
+      "id": "caller",
+      "label": "Caller",
+      "group": "client",
+      "x": 0,
+      "y": 200
+    },
+    {
+      "id": "pre",
+      "label": "Before the call: four layers and the two questions",
+      "group": "gateway",
+      "x": 400,
+      "y": 200
+    },
+    {
+      "id": "hold",
+      "label": "Hold: reference and expiry, retry later",
+      "group": "policy",
+      "x": 400,
+      "y": 0
+    },
+    {
+      "id": "reqinsp",
+      "label": "Request examined (findings)",
+      "group": "gateway",
+      "x": 800,
+      "y": 200
+    },
+    {
+      "id": "refuse",
+      "label": "Refuse the call",
+      "group": "policy",
+      "x": 800,
+      "y": 0
+    },
+    {
+      "id": "tool",
+      "label": "Upstream tool (simulated)",
+      "group": "upstream",
+      "x": 1200,
+      "y": 200
+    },
+    {
+      "id": "repinsp",
+      "label": "Reply examined (findings)",
+      "group": "gateway",
+      "x": 1200,
+      "y": 400
+    },
+    {
+      "id": "withheld",
+      "label": "Withhold the result",
+      "group": "policy",
+      "x": 800,
+      "y": 400
+    },
+    {
+      "id": "released",
+      "label": "Result released",
+      "group": "client",
+      "x": 400,
+      "y": 400
+    }
+  ],
+  "edges": [
+    {
+      "source": "caller",
+      "target": "pre",
+      "label": "Call with a token"
+    },
+    {
+      "source": "pre",
+      "target": "hold",
+      "label": "Allow then deny"
+    },
+    {
+      "source": "pre",
+      "target": "reqinsp",
+      "label": "Allowed"
+    },
+    {
+      "source": "reqinsp",
+      "target": "refuse",
+      "label": "Finding: refuse"
+    },
+    {
+      "source": "reqinsp",
+      "target": "tool",
+      "label": "Forwarded"
+    },
+    {
+      "source": "tool",
+      "target": "repinsp",
+      "label": "Reply comes back"
+    },
+    {
+      "source": "repinsp",
+      "target": "withheld",
+      "label": "Finding: withhold"
+    },
+    {
+      "source": "repinsp",
+      "target": "released",
+      "label": "No finding: released"
+    }
+  ],
+  "steps": [
+    {
+      "title": "The call arrives",
+      "what": "Token verified, then the four scope checks and the attended and unattended questions: everything that can allow, deny or hold happens here.",
+      "edges": [
+        0
+      ]
+    },
+    {
+      "title": "A hold is possible only here",
+      "what": "Allow then deny holds the call for a person before anything is sent upstream.",
+      "edges": [
+        1
+      ]
+    },
+    {
+      "title": "Allowed: the request is examined",
+      "what": "The examined request has findings (a card number, an instruction override, a secret).",
+      "edges": [
+        2
+      ]
+    },
+    {
+      "title": "A finding refuses the call",
+      "what": "The choice at this point is to refuse. There is no hold: a rule that tries is refused when it is saved.",
+      "edges": [
+        3
+      ]
+    },
+    {
+      "title": "No finding: the call is made",
+      "what": "The request goes upstream.",
+      "edges": [
+        4
+      ]
+    },
+    {
+      "title": "The reply comes back",
+      "what": "The reply is examined next.",
+      "edges": [
+        5
+      ]
+    },
+    {
+      "title": "A finding withholds the result",
+      "what": "The call already happened; the result is withheld. Again, no hold.",
+      "edges": [
+        6
+      ]
+    },
+    {
+      "title": "No finding: released",
+      "what": "The caller gets the result.",
+      "edges": [
+        7
+      ]
+    }
+  ]
+}
