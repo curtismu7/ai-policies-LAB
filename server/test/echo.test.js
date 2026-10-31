@@ -1,0 +1,97 @@
+// A credential the visitor types must come back in NO response field, hop pane, outbox entry, audit entry, log line or error: tested by typing every
+// credential shape into every place a request can carry text, on every endpoint, and searching every answer (and the process output) for it.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { C, get, post, put, withServer } from './helpers.js';
+import { SECRETS } from './secrets.js';
+
+const NEEDLES = Object.fromEntries(Object.entries(SECRETS).map(([k, v]) => [k, { raw: v, probe: k === 'pem' ? 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC' : k === 'bearer' ? 'tokenvalue' : k === 'assignment' ? 'hunter2hunter2' : v }]));
+const W = (id) => ({ 'x-workspace': id });
+const live = (extra = {}) => ({ mode: 'live', vertical: 'finance', ...extra });
+const route = `/mcp/${C.castApp}`;
+
+test('typing every credential shape into every field of every endpoint never echoes it', async () => {
+  const out = []; const realOut = process.stdout.write.bind(process.stdout); const realErr = process.stderr.write.bind(process.stderr);
+  await withServer(async (url) => {
+    const good = (await (await post(url, '/api/token', live({ token: { claims: { sub: C.castAgent, surfaces: ['tool'], scope: `${C.castApp}:write`, department: C.castDept, end_user: C.castUser } } }))).json()).result.labToken;
+    await post(url, '/api/evaluate', live({ request: { route, tool: C.castToolHold, arguments: { record: 'r', newValue: 'n' }, token: good } }));
+    const sweep = async (v) => {
+      const enc = encodeURIComponent(v);
+      const bodies = [
+        ['POST', '/api/evaluate', live({ request: { route: v, tool: v, arguments: { record: v, [v]: v }, argumentsText: undefined, token: v, headers: { [v]: v, 'x-scopes': v }, approvalRef: v, simulatedReply: v, labFault: v } })],
+        ['POST', '/api/evaluate', live({ request: { route, tool: C.castToolRead, argumentsText: `{"record":"${v.replace(/["\\\n]/g, '')}"}`, token: good, simulatedReply: `x ${v}` } })],
+        ['POST', '/api/evaluate', live({ request: { route, tool: C.castToolHold, arguments: { record: v, newValue: `n ${v}` }, token: good, headers: { [v]: v } } })],
+        ['POST', '/api/evaluate', live({ request: { route, tool: C.castToolRead, arguments: { record: 'r' }, token: good, [v]: v } })],
+        ['POST', '/api/evaluate', live({ request: { route, tool: v, arguments: {}, token: good } })],
+        ['POST', '/api/evaluate', live({ request: v, [v]: v })],
+        ['POST', '/api/token', live({ token: { claims: { sub: v, scope: v, [v]: v, end_user: v }, ttlMin: v } })],
+        ['POST', '/api/token', live({ token: { claims: { note: `a ${v} b` } } })],
+        ['POST', '/api/token', live({ token: { [v]: v } })],
+        ['POST', `/api/approvals/${enc}/decision`, live({ decision: { approver: v, decision: v, authLevel: v, comment: v, [v]: v } })],
+        ['POST', '/api/approvals/apr-0001/decision', live({ decision: { approver: C.castSecurity, decision: 'approve', authLevel: 3, comment: `c ${v}` } })],
+        ['POST', '/api/approvals/apr-0001/decision', live({ decision: { approver: C.castApprover, decision: 'deny', authLevel: 2, comment: `c ${v}` } })],
+        ['POST', '/api/clock', live({ clock: { minutes: v, [v]: v } })],
+        ['PUT', `/api/policies/${enc}`, live({ rules: [{ id: v, app: v, tool: v, users: [v], requiresScope: v, identity: v, surfaces: [v], [v]: v, when: { arg: v, op: v, value: v }, approval: { roles: [v], channel: v, binding: v } }] })],
+        ['PUT', '/api/policies/users', live({ rules: [{ id: 'u', app: C.castApp, tool: C.castToolRead, users: [v] }] })],
+        ['PUT', '/api/policies/apps', live({ rules: [{ id: 'a', identity: '*', app: C.castApp, requiredClaims: [{ claim: 'region', oneOf: [v] }] }] })],
+        ['POST', `/api/policies/${enc}/reset`, live({})],
+        ['POST', '/api/canonicalize', { mode: v, vertical: v, argumentsText: `{"a":"${v.replace(/["\\\n]/g, '')}"}`, route: v, tool: v, [v]: v }],
+        ['POST', '/api/canonicalize', { arguments: { a: v } }],
+        ['POST', '/api/reset', { [v]: v }],
+      ];
+      const gets = [`/api/state?mode=${enc}`, `/api/state?mode=live&vertical=${enc}&scenario=${enc}`, `/api/state?mode=mock&scenario=${enc}`, `/api/story?vertical=${enc}`, `/api/diagram?name=${enc}&vertical=${enc}`, `/api/${enc}`, `/api/health?x=${enc}`, `/api/jwks?x=${enc}`];
+      const texts = [];
+      for (const [m, p, b] of bodies) { const r = await (m === 'PUT' ? put : post)(url, p, b); texts.push(`${m} ${p.slice(0, 20)} ${r.status} ${await r.text()} ${[...r.headers.values()].join(' ')}`); }
+      for (const g of gets) { const r = await get(url, g); texts.push(`GET ${r.status} ${await r.text()} ${[...r.headers.values()].join(' ')}`); }
+      for (const hv of [v, `a ${v}`]) { const r = await get(url, '/api/state?mode=live', { 'x-workspace': hv.slice(0, 40).replace(/[^\x20-\x7e]/g, '?') }); texts.push(`H ${r.status} ${await r.text()}`); }
+      return texts;
+    };
+    process.stdout.write = (c, ...a) => { out.push(String(c)); return realOut(c, ...a); }; process.stderr.write = (c, ...a) => { out.push(String(c)); return realErr(c, ...a); };
+    try {
+      for (const [name, n] of Object.entries(NEEDLES)) {
+        const texts = await sweep(n.raw);
+        const bad = texts.filter((t) => t.includes(n.probe));
+        assert.equal(bad.length, 0, `${name}: the raw value is in an answer: ${bad.map((l) => l.slice(0, 200)).join(' | ')}`);
+        const state = JSON.stringify(await (await get(url, '/api/state?mode=live')).json());
+        assert.ok(!state.includes(n.probe), `${name}: absent from the state`);
+      }
+    } finally { process.stdout.write = realOut; process.stderr.write = realErr; }
+  });
+  for (const n of Object.values(NEEDLES)) assert.ok(!out.join('').includes(n.probe), 'nothing was logged');
+});
+
+test('a credential in an accepted evaluation is masked in the answer, the hops, the approval summary, the outbox and the audit', async () => {
+  await withServer(async (url) => {
+    for (const [name, n] of Object.entries(NEEDLES)) {
+      const ws = `echo-${name.toLowerCase()}`.slice(0, 30).replace(/[^a-z0-9-]/g, '-');
+      const tokenRes = await post(url, '/api/token', live({ token: { claims: { sub: C.castAgent, surfaces: ['tool'], scope: `${C.castApp}:write`, department: C.castDept, end_user: C.castUser } } }), W(ws));
+      const token = (await tokenRes.json()).result.labToken;
+      const r = await post(url, '/api/evaluate', live({ request: { route, tool: C.castToolHold, arguments: { record: 'r', newValue: `please ${n.raw} thanks` }, token } }), W(ws));
+      const body = await r.text();
+      assert.equal(r.status, 403, name); assert.ok(!body.includes(n.probe), `${name}: not in the answer`); assert.match(body, /\[masked:/);
+      assert.ok(!body.includes(token.slice(20, 60)), 'the token is not echoed by the evaluation either');
+      const d = await post(url, '/api/approvals/apr-0001/decision', live({ decision: { approver: C.castApprover, decision: 'approve', authLevel: 2, comment: `ok ${n.raw}` } }), W(ws));
+      const db = await d.text(); assert.equal(d.status, 200); assert.ok(!db.includes(n.probe), `${name}: decision`);
+      assert.ok(db.includes('"outbox"') && db.includes('"audit"') && db.includes('"hops"') && db.includes('"approvals"'));
+    }
+  });
+});
+test('field names are not echoed either: an unknown key that is itself a credential never comes back', async () => {
+  await withServer(async (url) => {
+    for (const n of Object.values(NEEDLES)) {
+      for (const [m, p, b] of [['POST', '/api/evaluate', live({ request: { [n.raw]: 1 } })], ['POST', '/api/token', live({ token: { claims: { [n.raw]: 1 } } })], ['PUT', '/api/policies/users', live({ rules: [{ id: 'x', [n.raw]: 1 }] })], ['POST', '/api/clock', live({ clock: { [n.raw]: 1 } })]]) {
+        const r = await (m === 'PUT' ? put : post)(url, p, b); const t = await r.text();
+        assert.ok(r.status >= 400, p); assert.ok(!t.includes(n.probe), p);
+      }
+    }
+  });
+});
+test('the token the visitor holds is never echoed by an evaluation (only a masked trace and the decoded claims)', async () => {
+  await withServer(async (url) => {
+    const token = (await (await post(url, '/api/token', live({ token: { claims: { sub: C.castAgent, surfaces: ['tool'], scope: `${C.castApp}:read`, department: C.castDept } } }))).json()).result.labToken;
+    const r = await (await post(url, '/api/evaluate', live({ request: { route, tool: C.castToolRead, arguments: { record: 'r' }, token } }))).text();
+    assert.ok(!r.includes(token) && !r.includes(token.split('.')[2]));
+    const tampered = await (await post(url, '/api/evaluate', live({ request: { route, tool: C.castToolRead, arguments: { record: 'r' }, token: `${token}zz` } }))).text();
+    assert.ok(!tampered.includes(token.split('.')[2]) && !tampered.includes(token.split('.')[1]));
+  });
+});

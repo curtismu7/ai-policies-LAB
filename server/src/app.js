@@ -18,6 +18,7 @@ import { liveState, mockState, runAction } from './service.js';
 import { buildCatalog, hasApp, hasTool, parseRoute } from './catalog.js';
 import { callHash, METHODS, normalizeArguments } from './canon.js';
 import { jwks } from './token.js';
+import { shown } from './engine.js';
 import { maskDeep } from './mask.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -69,7 +70,7 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
     if (!n.ok) return res.status(422).json({ ok: false, code: n.code, reason: n.reason });
     const target = `${r.surface}:${r.app}/${tool}`;
     const h = callHash({ method: METHODS[r.surface], target, arguments: n.value });
-    return res.json({ ok: true, method: METHODS[r.surface], target: hasApp(buildCatalog(cast), r.app) ? target : `${r.surface}:(unknown application)/${tool}`, canonical: h.canonical, hash: h.hash });
+    return res.json({ ok: true, method: METHODS[r.surface], target: hasApp(buildCatalog(cast), r.app) ? target : `${r.surface}:(unknown application)/${tool}`, canonical: shown(h.canonical, 600), hash: h.hash });
   });
   api.get('/jwks', (_req, res) => { noStore(res); res.json({ jwks: jwks(), note: 'The lab\'s public key. The private half lives in memory in this process and is never shown or written.' }); });
 

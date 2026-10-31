@@ -430,7 +430,7 @@ export class Engine {
 
 // The text the page shows for the canonical form: as it is hashed, unless it hides a credential-shaped value (zero-width characters interleaved, say): then
 // the masked copy is shown instead. Masked BEFORE it is cut.
-function shown(text, max) {
+export function shown(text, max) {
   const flat = text.normalize('NFKC').replace(/[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g, '');
   return findCredentials(flat).length ? cleanFree(text, max) : text.slice(0, max);
 }
