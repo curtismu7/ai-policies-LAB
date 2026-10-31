@@ -4,7 +4,7 @@ import { EDITABLE_FIELDS, LIMITS as POLICY_LIMITS } from './policies.js';
 import { ADVANCE_MAX_MIN, LIMITS, STAGES, STAGE_TITLE } from './engine.js';
 import { AUTH_LEVELS, CHANNELS, FINDINGS, SURFACE_LABEL } from './catalog.js';
 import { LIMITS as CANON_LIMITS } from './canon.js';
-import { scenarioList } from './scenarios.js';
+import { canonicalExamples, scenarioList } from './scenarios.js';
 
 export const rawStory = () => ({ title: TITLE, intro: INTRO, banner: BANNER, claims: CLAIMS, talkTrack: TALK_TRACK, why: WHY });
 
@@ -16,6 +16,7 @@ export function buildStory(cast, vertical) {
     fieldSources: FIELD_SOURCES.map((f) => ({ ...f, sourceLabel: FIELD_SOURCE_NAMES[f.source] })), limitsText: LIMITS_TEXT,
     limits: { engine: LIMITS, policy: POLICY_LIMITS, canon: CANON_LIMITS, advanceMaxMin: ADVANCE_MAX_MIN },
     stages: STAGES.map((id) => ({ id, title: STAGE_TITLE[id] })), editableFields: EDITABLE_FIELDS, authLevels: AUTH_LEVELS, channels: CHANNELS, findings: FINDINGS, surfaces: SURFACE_LABEL,
+    canonicalExamples: canonicalExamples(cast),
     scenarios: scenarioList(cast).map((sc) => ({ id: sc.id, title: sc.title, say: sc.say })),
     talkTrack: s.talkTrack, cast, vertical, verticals: Object.keys(VERTICALS),
   };
