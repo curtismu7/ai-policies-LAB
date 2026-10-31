@@ -5,7 +5,7 @@
 //
 // Verification is strict: three base64url parts, header exactly alg RS256 (so alg none and an HS256 key-confusion token are refused) and the lab's kid, the
 // signature checked over the signed part, an issuer and an audience, not-before and expiry against the LAB CLOCK (injected: the clock only moves forward).
-import { createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
+import { generateKeyPairSync, sign, verify } from 'node:crypto';
 import { FORBIDDEN_KEYS } from './canon.js';
 
 export const ISSUER = 'https://issuer.lab.example';
@@ -19,7 +19,7 @@ const keys = () => (pair ||= generateKeyPairSync('rsa', { modulusLength: 2048 })
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
-export const jwks = () => ({ keys: [{ ...createPublicKey(keys().publicKey).export({ format: 'jwk' }), kid: KID, use: 'sig', alg: 'RS256' }] });
+export const jwks = () => ({ keys: [{ ...keys().publicKey.export({ format: 'jwk' }), kid: KID, use: 'sig', alg: 'RS256' }] });
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const hasForbidden = (v, depth = 0) => depth < 4 && isObj(v) && (FORBIDDEN_KEYS.some((k) => Object.hasOwn(v, k)) || Object.values(v).some((x) => hasForbidden(x, depth + 1)));

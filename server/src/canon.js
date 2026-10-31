@@ -10,7 +10,7 @@
 // Canonical JSON: no whitespace; object keys sorted by UTF-16 code unit AFTER normalising each key to Unicode NFC; array order is kept (a different order
 // is a different call); strings are NFC (canonically equivalent spellings agree, compatibility look-alikes such as fullwidth digits do NOT: NFKC is not
 // used, because it would let an approval for one string cover another); numbers print as JavaScript prints them (100, 100.0, 1e2 and 100.00 all give 100,
-// minus zero gives 0) and only numbers that a double holds exactly are accepted: at most 15 significant digits and at most 2^53 - 1 for whole numbers;
+// minus zero gives 0) and only numbers that a double holds exactly are accepted: at most 15 significant digits for numbers with a fraction or an exponent, and at most 2^53 - 1 for whole numbers;
 // "100" (a string) and 100 (a number) differ.
 // Refused (a refused call is a DENIAL, never a guess): a duplicate key (including two keys that are the same after NFC), the keys __proto__,
 // constructor and prototype at any depth, a lone surrogate, a raw control character inside a string, a number that is not exact, text that is not JSON,
@@ -29,7 +29,7 @@ const NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 function checkNumberLiteral(lit) {
   if (!NUMBER.test(lit)) bad('arguments_not_json', 'a number is not written the way JSON writes numbers');
   const digits = lit.replace(/[eE].*$/, '').replace(/^-/, '').replace('.', '').replace(/^0+/, '').replace(/0+$/, '');
-  if (digits.length > LIMITS.digits) bad('number_not_exact', `a number has more than ${LIMITS.digits} significant digits, so a double cannot hold it exactly`);
+  if (!/^-?\d+$/.test(lit) && digits.length > LIMITS.digits) bad('number_not_exact', `a number has more than ${LIMITS.digits} significant digits, so a double cannot hold it exactly`);
   const n = Number(lit);
   if (!Number.isFinite(n)) bad('number_not_exact', 'a number is too large for a double');
   if (Number.isInteger(n) && Math.abs(n) > Number.MAX_SAFE_INTEGER) bad('number_not_exact', 'a whole number is above 2^53 - 1');
