@@ -16,13 +16,13 @@ import { InputError, refuse } from './errors.js';
 import { buildCatalog, hasApp, hasTool, parseRoute, SURFACES, CHANNELS } from './catalog.js';
 import { buildRoster } from './cast.js';
 import { callHash, canonicalJson, METHODS, normalizeArguments } from './canon.js';
-import { cleanFree, cleanUnderKey, findCredentials, isCredentialKey, looksLikeCredential, normalizeForMatching } from './credentials.js';
+import { cleanFree, cleanUnderKey, findCredentials, isCredentialKey, looksLikeCredential, MAX_SCAN, normalizeForMatching } from './credentials.js';
 import { findingKinds, findingsIn, normalizeText } from './inspect.js';
 import { defaultPolicy, validateLayer, LAYERS, OPS } from './policies.js';
 import { mint, verifyToken, MAX_TTL_MIN } from './token.js';
 import { formatTraceparent } from './trace.js';
 
-export const LIMITS = { approvals: 200, audit: 500, outbox: 300, hops: 40, comment: 200, reply: 2000, claims: 20, claimItems: 10, claimString: 120 };
+export const LIMITS = { approvals: 200, audit: 500, outbox: 300, hops: 40, comment: 200, claims: 20, claimItems: 10, claimString: 120 };
 export const LAB_EPOCH_MS = Date.parse('2026-11-02T09:00:00.000Z');
 export const ADVANCE_MAX_MIN = 10080;
 export const STAGES = ['request', 'token', 'surface', 'application', 'action', 'end-user', 'attended-unattended', 'request-inspection', 'call', 'reply-inspection'];
@@ -130,6 +130,8 @@ export class Engine {
   }
 
   decide(p) {
+    // A decision writes an audit entry, so it obeys the same cap as an evaluation and is refused as a whole BEFORE anything changes.
+    if (this.audit.length >= LIMITS.audit) throw refuse('workspace_full', 'this workspace is full (the audit trail reached its limit of 500 entries): Reset to start again', 409);
     this.sweep();
     if (!isObj(p)) throw refuse('bad_request', 'a decision is an object');
     const a = typeof p.ref === 'string' ? this.approvals.find((x) => x.ref === p.ref) : null;
@@ -140,6 +142,8 @@ export class Engine {
     if (!who) throw refuse('approver_unknown', 'the approver is not a person in the roster (an agent can never approve)', 403);
     if (who.id === a.requester || who.id === a.endUser) throw refuse('self_approval', 'the person the call acts for cannot approve it', 403);
     if (!who.roles.some((r) => a.required.roles.includes(r))) throw refuse('role_missing', 'the approver does not hold a role the request names', 403);
+    // one person, one voice: a signer can neither sign twice nor deny what they signed
+    if (a.approvals.some((x) => x.approver === who.id)) throw refuse('duplicate_approver', 'that approver has already signed this request; a second signature counts once, and a signer cannot deny what they signed', 409);
     const comment = cleanFree(p.comment ?? '', LIMITS.comment);
     if (p.decision === 'deny') {
       a.status = 'denied'; a.decidedBy = who.id; a.decidedAt = iso(this.clockMs);
@@ -151,7 +155,6 @@ export class Engine {
     if (!Number.isInteger(level) || level < 1 || level > 3) throw refuse('bad_auth_level', 'authLevel is 1 (password), 2 (push approval) or 3 (hardware key)');
     if (level > who.maxAuthLevel) throw refuse('auth_level_not_available', 'the approver cannot present an authentication stronger than their roster entry allows', 403);
     if (level < a.required.minAuthLevel) throw refuse('auth_too_weak', 'the approver signed in with a weaker authentication than the request demands', 403);
-    if (a.approvals.some((x) => x.approver === who.id)) throw refuse('duplicate_approver', 'that approver has already signed this request; a second signature from the same person counts once', 409);
     a.approvals.push({ approver: who.id, authLevel: level, at: iso(this.clockMs), comment });
     if (a.approvals.length >= a.required.approvers) {
       a.status = 'approved'; a.decidedAt = iso(this.clockMs); a.decidedBy = a.approvals.map((x) => x.approver);
@@ -388,7 +391,7 @@ export class Engine {
       for (const s of STAGES.slice(STAGES.indexOf(stop.stage) + 1)) trace.push({ stage: s, title: STAGE_TITLE[s], verdict: 'not-reached', code: 'not_reached', reason: stop.verdict === 'hold' ? 'the call was not made: it is held until an approver signs and the agent retries' : stop.stage === 'request-inspection' ? 'the call was refused before it was made' : 'an earlier layer already refused: nothing past it is consulted' });
     } else {
       // the call proceeds: consume the grant now, then reply inspection
-      let reply = typeof inp.simulatedReply === 'string' ? inp.simulatedReply.slice(0, LIMITS.reply) : `ok: ${tool} completed (simulated upstream)`;
+      let reply = typeof inp.simulatedReply === 'string' ? inp.simulatedReply : `ok: ${tool} completed (simulated upstream)`;
       const callRes = run('call', () => {
         if (c.grant) {
           const g = c.grant;
@@ -401,6 +404,8 @@ export class Engine {
         return pass(c.grant ? `the call was made under approval ${c.grant.ref}` : 'the call was made', { grant: c.grant ? c.grant.ref : null });
       });
       let rep = callRes.verdict === 'pass' ? run('reply-inspection', () => {
+        // The WHOLE reply is inspected (only the copy that is shown is cut, below). A reply too long to be read in full fails closed: it is withheld, never half-read.
+        if (reply.length > MAX_SCAN) throw new Error('reply too long to inspect');
         const kinds = findingKinds(reply);
         d.findings.push(...kinds.map((k) => ({ stage: 'reply', kind: k })));
         const rule = this.policy.inspection.find((r) => r.stage === 'reply' && kinds.includes(r.finding));
@@ -436,9 +441,12 @@ export class Engine {
 }
 
 // The text the page shows for the canonical form: as it is hashed, unless it hides a credential-shaped value (zero-width characters interleaved, say): then
-// the masked copy is shown instead. Masked BEFORE it is cut.
+// the masked copy is shown instead. Masked BEFORE it is cut. The canonical form is JSON, which writes a control character as an escape (\u0000, \b, \f), so the
+// escapes are turned back into the characters they stand for before the text is matched, or a control character inside a keyword would hide it.
+const jsonUnescape = (text) => text.replace(/\\(?:u([0-9a-fA-F]{4})|([^u]))/g, (m, hex, ch) => (hex ? String.fromCharCode(parseInt(hex, 16)) : ch === 'b' ? '\b' : ch === 'f' ? '\f' : m));
 export function shown(text, max) {
-  return findCredentials(normalizeForMatching(text)).length ? cleanFree(text, max) : text.slice(0, max);
+  const plain = jsonUnescape(text);
+  return findCredentials(normalizeForMatching(plain)).length ? cleanFree(plain, max) : text.slice(0, max);
 }
 
 // The claims as shown on the page: only well-known claim values are shown as they are, the rest as types; credential-shaped strings never reach here (mint refuses them).

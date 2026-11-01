@@ -3,13 +3,12 @@
 //   card-number  13 to 19 digits (spaces or dashes allowed between them) that pass the Luhn check
 //   injection    a short list of instruction-override phrases
 //   secret       a credential-shaped value (the same detectors that mask what the visitor types)
-// The text is normalised first (NFKC, zero-width and bidi characters deleted, spaces collapsed) so interleaving cannot hide a finding. A finding names its
-// KIND and WHERE, never the value.
+// The text is normalised first (NFKC, invisible and control characters deleted, percent-decoded, spaces collapsed) so interleaving cannot hide a finding. A finding
+// names its KIND and WHERE, never the value. The WHOLE text is read (up to the scan limit in credentials.js; the engine refuses a reply longer than that instead of
+// reading part of it), the argument KEYS are read as well as the values, and numbers are read as the digits they print as.
 import { findCredentials, normalizeForMatching } from './credentials.js';
 
-const HIDDEN = /[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 const PHRASES = ['ignore previous instructions', 'ignore all previous', 'ignore the above', 'disregard the above', 'disregard all previous', 'reveal your system prompt', 'forget your instructions'];
-const MAX_TEXT = 4000;
 
 const luhn = (digits) => {
   let sum = 0; let dbl = false;
@@ -17,7 +16,7 @@ const luhn = (digits) => {
   return sum % 10 === 0;
 };
 // Same normaliser as the masking (percent-decoded, NFKC, every invisible character deleted), so encoding or interleaving cannot hide a finding.
-export const normalizeText = (s) => normalizeForMatching(String(s).slice(0, MAX_TEXT)).replace(/\s+/g, ' ');
+export const normalizeText = (s) => normalizeForMatching(String(s)).replace(/\s+/g, ' ');
 
 export function findingKinds(text) {
   const t = normalizeText(text); const kinds = new Set();
@@ -28,15 +27,17 @@ export function findingKinds(text) {
   return [...kinds];
 }
 
-// Findings in a value: [{ kind, path }] over every string in it (iterative, bounded). Paths are the argument names, which the engine only ever shows when it
-// can mask them; the page shows kind and a count.
+// Findings in a value: [{ kind, path }] over every string, every number (as the digits it prints as) and every object KEY in it (iterative, bounded). Paths are the
+// argument names, which the engine only ever shows when it can mask them; the page shows kind and a count.
 export function findingsIn(value, root = '') {
   const out = []; const work = [[value, root, 0]]; let seen = 0;
+  const add = (text, path) => { for (const kind of findingKinds(text)) out.push({ kind, path: path || '/' }); };
   while (work.length && seen++ < 500) {
     const [v, path, depth] = work.pop();
-    if (typeof v === 'string') { for (const kind of findingKinds(v)) out.push({ kind, path: path || '/' }); }
+    if (typeof v === 'string') add(v, path);
+    else if (typeof v === 'number') add(String(v), path);
     else if (depth < 8 && Array.isArray(v)) v.forEach((x, i) => work.push([x, `${path}/${i}`, depth + 1]));
-    else if (depth < 8 && v && typeof v === 'object') for (const k of Object.keys(v)) work.push([v[k], `${path}/${k}`, depth + 1]);
+    else if (depth < 8 && v && typeof v === 'object') for (const k of Object.keys(v)) { add(k, `${path}/${k}`); work.push([v[k], `${path}/${k}`, depth + 1]); }
   }
   return out;
 }

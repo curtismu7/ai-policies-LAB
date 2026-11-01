@@ -80,10 +80,14 @@ test('wrong types everywhere in the envelope deny and never throw', () => {
   }
   for (const input of [undefined, null, 5, 'x', [], () => 1]) assert.equal(newEngine().evaluate(input).outcome, 'deny');
 });
-test('a huge simulated reply is cut (never stored) and a huge header set does not matter', () => {
+test('a long simulated reply is inspected whole and only the stored copy is cut; a huge header set does not matter; a reply too long to read in full is withheld (fails closed)', () => {
   const e = newEngine();
-  const d = e.evaluate(readCall(e, { simulatedReply: 'word '.repeat(100000), headers: Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`h${i}`, 'v'])) }));
+  const d = e.evaluate(readCall(e, { simulatedReply: 'word '.repeat(30000), headers: Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`h${i}`, 'v'])) }));
   assert.equal(d.outcome, 'allow'); assert.ok(d.reply.length <= 400);
+  const big = e.evaluate(readCall(e, { simulatedReply: 'word '.repeat(50000) }));
+  assert.equal(big.outcome, 'withhold'); assert.equal(big.failedClosed, true); assert.equal(big.resultReleased, false); assert.equal(big.reply, null);
+  const edge = e.evaluate(readCall(e, { simulatedReply: 'a'.repeat(200000) }));
+  assert.equal(edge.outcome, 'withhold', 'a 200000-character run is a credential-shaped blob, so it is withheld by the finding');
 });
 
 test('POST-INSPECTION CANNOT HOLD: findings on the request refuse, findings on the reply withhold, and neither ever creates an approval', () => {

@@ -26,6 +26,17 @@ const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
 const CONFIG = process.env.CUSTOMER_CONFIG || path.resolve(HERE, '../../customer.config.json');
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+// Every /api route the lab has and the one method it takes. A known route called with another method answers 405 with Allow (not 404), before the body is read.
+export const API_ROUTES = [
+  [/^\/(?:story|diagram|info|jwks|state)\/?$/i, 'GET'],
+  [/^\/(?:canonicalize|evaluate|token|clock|reset)\/?$/i, 'POST'],
+  [/^\/approvals\/[^/]+\/decision\/?$/i, 'POST'],
+  [/^\/policies\/[^/]+\/?$/i, 'PUT'],
+  [/^\/policies\/[^/]+\/reset\/?$/i, 'POST'],
+];
+// The single-page app answers only for a path that can be a page: no file extension, no dot-segment, valid percent-encoding. Anything else that is missing is a 404.
+const isPagePath = (p) => { try { p = decodeURIComponent(p); } catch { return false; } return !/\.[^/]*$/.test(p) && !/\/\./.test(p); };
+
 export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST } = {}) {
   const app = express();
   app.disable('x-powered-by');
@@ -34,9 +45,14 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
   app.use((_req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); next(); });
 
   const api = express.Router();
-  api.use(express.json({ limit: '32kb' }));
   // Defence in depth: every JSON answer is masked for credential-shaped values, whatever path produced it.
   api.use((_req, res, next) => { const send = res.json.bind(res); res.json = (b) => send(maskDeep(b)); next(); });
+  api.use((req, res, next) => {
+    const hit = API_ROUTES.find(([re]) => re.test(req.path));
+    if (!hit || req.method === hit[1] || req.method === 'OPTIONS' || (hit[1] === 'GET' && req.method === 'HEAD')) return next();
+    return res.set('Allow', hit[1] === 'GET' ? 'GET, HEAD' : hit[1]).status(405).json({ error: 'method_not_allowed' });
+  });
+  api.use(express.json({ limit: '32kb' }));
   api.use('/health', health.router);
   const verticalOf = (req) => verticalFrom(req.body?.vertical ?? req.query.vertical);
   const castFor = (req) => loadCast(configFile, verticalOf(req));
@@ -111,7 +127,7 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
 
   if (fs.existsSync(path.join(webDist, 'index.html'))) {
     app.use(express.static(webDist));
-    app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+    app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => (isPagePath(req.path) ? res.sendFile(path.join(webDist, 'index.html')) : next()));
   }
   // The last two handlers catch everything that is left, for every method and every path: Express's default answers ("Cannot POST /<path>", or an
   // HTML stack trace with file paths) would echo the path the visitor typed, which may be a token. Fixed JSON, no path.

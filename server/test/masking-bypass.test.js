@@ -143,9 +143,10 @@ test('the approval summary of a held call never stores a value, whatever the arg
     }
   });
 });
-test('normalizeForMatching: deletes every Default_Ignorable, Cf and replacement character, decodes up to three rounds, applies NFKC', () => {
+test('normalizeForMatching: deletes every Default_Ignorable, Cf and replacement character, decodes up to four rounds, applies NFKC', () => {
   for (const ch of INVISIBLE) assert.equal(normalizeForMatching(`a${ch}b`), 'ab', `U+${ch.codePointAt(0).toString(16)}`);
-  assert.equal(normalizeForMatching('%25252541'), '%41', 'three rounds only');
+  assert.equal(normalizeForMatching('%25252541'), 'A', 'four rounds are decoded');
+  assert.equal(normalizeForMatching('%2525252541'), '%41', 'and no more than four');
   assert.equal(normalizeForMatching('ｐａｓｓ'), 'pass');
   assert.equal(normalizeForMatching(undefined), '');
 });
