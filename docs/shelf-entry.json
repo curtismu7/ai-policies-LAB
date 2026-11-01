@@ -4,7 +4,7 @@
       "id": "ai-policies-lab",
       "name": "AI Policies LAB",
       "kind": "Demo",
-      "description": "AI Policies, scope and HITL: four layered scope checks (surface, application, action, end user) read from a real RS256 token you mint locally, a third outcome that holds a call for a person, attended and unattended evaluation, single-use approvals bound to the exact call, and fail closed. A simulation of the 2026-11-02 Ping release claims. Mock tables, or a Live local engine. Every product claim is UNVERIFIED on our tenant.",
+      "description": "Scope and HITL: four layered scope checks (surface, application, action, end user) on a real RS256 token you mint locally, a call held for a person, single-use approvals bound to the exact call, fail closed. Simulates release claims, all UNVERIFIED. Mock tables or a Live local engine.",
       "url": "http://localhost:7500",
       "healthPath": "/api/health",
       "composeFile": "ai-policies-LAB/docker-compose.yml",
