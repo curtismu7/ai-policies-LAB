@@ -43,7 +43,19 @@ const tab = (name) => userEvent.click(screen.getByRole("tab", { name }));
 const click = (id) => userEvent.click(screen.getByTestId(id));
 const live = async () => { await click("mode-live"); await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/)); await screen.findByTestId("run-hold", {}, T); };
 const pick = (id, value) => userEvent.selectOptions(screen.getByTestId(id), value);
-const run = async (id) => { await waitFor(() => expect(screen.getByTestId(`run-${id}`)).toBeEnabled(), T); await click(`run-${id}`); await waitFor(() => expect(screen.getByTestId("decision")).toBeInTheDocument(), T); await waitFor(() => expect(screen.getByTestId(`run-${id}`)).toBeEnabled(), T); };
+// Click a quick start and wait for ITS answer: the evaluate request must have been sent and answered (a decision from an earlier click may still be on the page, and the
+// button only turns disabled after React has rendered, so neither is proof that this run has finished).
+const evaluations = () => seen.filter((x) => x.url.endsWith("/api/evaluate")).length;
+const run = async (id) => {
+  await waitFor(() => expect(screen.getByTestId(`run-${id}`)).toBeEnabled(), T);
+  const before = evaluations();
+  await click(`run-${id}`);
+  await waitFor(() => expect(evaluations()).toBeGreaterThan(before), T);
+  await waitFor(() => expect(pending).toBe(0), T);
+  await waitFor(() => expect(screen.getByTestId("decision")).toBeInTheDocument(), T);
+  await waitFor(() => expect(screen.getByTestId(`run-${id}`)).toBeEnabled(), T);
+  await new Promise((r) => setTimeout(r, 0));
+};
 const code = () => screen.getByTestId("decision-code").textContent;
 const settle = async () => { await waitFor(() => expect(pending).toBe(0), T); await new Promise((r) => setTimeout(r, 0)); };
 
