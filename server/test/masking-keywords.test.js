@@ -93,6 +93,8 @@ test('two passphrases in one text are each masked on their own (S1b: the first o
 test('the shapeless-keyword rule is bounded: a bare keyword masks only a value that looks like a secret (six characters and a digit, a capital inside, or a symbol)', () => {
   assert.equal(cleanFree('password Tr0ub4'), '[masked:assignment]', 'six characters with a digit');
   assert.equal(cleanFree('password Ab1'), 'password Ab1', 'under six characters');
+  assert.equal(cleanFree('password Ab1x2'), 'password Ab1x2', 'five characters are still too short');
+  assert.equal(cleanFree('password Ab1x23'), '[masked:assignment]', 'six characters');
   assert.equal(cleanFree('password hunterxyz'), 'password hunterxyz', 'a lowercase word is prose: the README states this miss');
   assert.equal(cleanFree('password hunterXyz'), '[masked:assignment]', 'a capital inside the word');
   assert.equal(cleanFree('password hunter_xyz'), '[masked:assignment]', 'a symbol');
@@ -133,5 +135,18 @@ test('S1b through the API: a passphrase typed into both arguments of a held chan
     assert.equal((r.result.canonical.match(/\[masked:passphrase\]/g) || []).length, 2, r.result.canonical);
     const st = await (await get(url, '/api/state?mode=live')).text();
     assert.ok(!st.includes('Tr0ub4dorXq52'));
+  });
+});
+
+test('a key NAMED session (or sid) hides its value whatever the value looks like, in every shown copy; and cannot be a claim name', async () => {
+  await withServer(async (url) => {
+    const good = await mintGood(url);
+    const r = await post(url, '/api/evaluate', live({ request: { route: `/mcp/${C.castApp}`, tool: C.castToolRead, arguments: { record: 'x' }, token: good, headers: { session: 'Sx9Qz2Lm8Rt8', sid: 'ab12cd36' } } }));
+    const t = await r.text();
+    assert.ok(!t.includes('Sx9Qz2Lm8Rt8') && !t.includes('ab12cd36'), t.slice(0, 400));
+    for (const name of ['session', 'sid', 'passphrase']) {
+      const m = await post(url, '/api/token', live({ token: { claims: { [name]: 'x' } } }));
+      assert.equal(m.status, 400, name); assert.equal((await m.json()).error, 'bad_claim_name', name);
+    }
   });
 });

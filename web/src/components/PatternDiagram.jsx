@@ -3,11 +3,14 @@ import { Background, BackgroundVariant, BaseEdge, Controls, EdgeLabelRenderer, g
 import "@xyflow/react/dist/style.css";
 import { useDiagramStepper, STEP_TIME_OPTIONS } from "../hooks/useDiagramStepper";
 import { REFIT_EVENT, useFitOnResize } from "../hooks/useFitOnResize";
-import { ClaimTag } from "./Bits";
+import { ClaimTag, SourceTag } from "./Bits";
 
-const FIT = { padding: 0.08 };
-// At phone width fitting the whole wide diagram makes the text unreadable, so the view is held at 0.8 on the first two boxes (node text is enlarged in app.css);
-// drag the canvas to pan, drag a box to move it.
+const FIT = { padding: 0.12 };
+const NARROW_FIT = { padding: 0.14, minZoom: 0.1 };
+// The view options for a width: the whole diagram in both cases (narrow allows a smaller zoom so every box fits).
+export const fitOptions = (isNarrow) => (isNarrow ? NARROW_FIT : FIT);
+// At phone width the whole diagram is still fitted, so every box is on screen (an earlier version held the view at 0.8 on the first two boxes, and the first box
+// started off screen); the boxes are small there, the step panel above carries the words, and the canvas can be zoomed and panned.
 const narrow = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 600px)").matches;
 const HANDLES = [["t", Position.Top], ["b", Position.Bottom], ["l", Position.Left], ["r", Position.Right]];
 
@@ -57,7 +60,8 @@ function sides(a, b) {
 
 function Canvas({ pattern, positions, onMove, stepper }) {
   const ref = useRef(null);
-  const fit = useMemo(() => (narrow() ? { padding: 0.1, minZoom: 0.8, maxZoom: 0.8, nodes: pattern.nodes.slice(0, 2).map((n) => ({ id: n.id })) } : FIT), [pattern]);
+  const isNarrow = narrow();
+  const fit = useMemo(() => fitOptions(isNarrow), [isNarrow]);
   useFitOnResize(ref, fit);
   const active = stepper.step >= 0 ? pattern.steps[stepper.step] : null;
   const nodes = pattern.nodes.map((n) => ({
@@ -79,7 +83,7 @@ function Canvas({ pattern, positions, onMove, stepper }) {
   });
   return (
     <div ref={ref} className="pat-canvas" data-testid="pattern-canvas">
-      <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={fit} nodesConnectable={false} minZoom={0.3}
+      <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={fit} nodesConnectable={false} minZoom={isNarrow ? 0.1 : 0.3}
         onNodeDragStop={(_, n) => onMove(n.id, n.position)} onNodeDrag={(_, n) => onMove(n.id, n.position)} proOptions={{ hideAttribution: true }}>
         <Background variant={BackgroundVariant.Dots} gap={18} />
         <Controls showInteractive={false} />
@@ -128,6 +132,7 @@ export default function PatternDiagram({ pattern, resetSignal = 0 }) {
     <section className="pat" aria-label={pattern.title}>
       <h2 className="pat__title">{pattern.title} <ClaimTag /></h2>
       <p className="head__intro">{pattern.intro}</p>
+      <p className="muted" data-testid="pattern-sources">The boxes and the order of the arrows: <SourceTag source="reading" /> of slide 52, which gives rows and not a drawing. Names and hosts in the labels: <SourceTag source="invented" />. That a hold can only happen before the call is made: <SourceTag source="deck" />.</p>
       <Controls2 stepper={stepper} onReset={reset} caption={step ? step.label : ""} />
       {step && (
         <article className="panel" data-testid="pattern-now">
@@ -138,6 +143,7 @@ export default function PatternDiagram({ pattern, resetSignal = 0 }) {
       <ReactFlowProvider>
         <Canvas pattern={pattern} positions={positions} onMove={onMove} stepper={stepper} />
       </ReactFlowProvider>
+      <p className="muted pat-hint" data-testid="pat-hint">On a narrow screen the whole diagram is shown small so every box is on screen: pinch or use + to zoom in, drag the background to pan.</p>
       <p className="muted">Drag any box; drag the background to pan. Simulated; hosts are examples; Ping release claims UNVERIFIED on our tenant. Moved: {Object.keys(positions).filter((k) => positions[k].x !== initial[k].x || positions[k].y !== initial[k].y).length} box(es).</p>
     </section>
   );

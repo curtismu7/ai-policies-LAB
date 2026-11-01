@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { visible } from "../safeText";
-import { ClaimTag, Json } from "./Bits";
+import { ClaimTag, Json, SourceTag } from "./Bits";
 import Decision from "./Decision";
 import { buildPresets, tamper } from "../presets";
 
@@ -31,7 +31,7 @@ function MockScenarios({ story, lab, scenarioId, setScenarioId, step, setStep })
         <section className="panel" data-testid="step-detail">
           <h3 className="panel__sub">{s.title}</h3>
           <p>{s.say}</p>
-          {s.claims ? <details><summary>The claims in the token for this step{s.tampered ? " (one character changed after signing)" : ""}</summary><Json value={s.claims} label="claims" /></details> : null}
+          {s.claims ? <details><summary>The claims in the token for this step{s.tampered ? " (one character changed after signing)" : ""} <SourceTag source="invented" /></summary><Json value={s.claims} label="claims" /></details> : null}
           {s.request ? <details><summary>The {s.op === "evaluate" ? "call" : "request"}</summary><Json value={s.request} label="request" /></details> : null}
           {s.op !== "evaluate" ? <Json value={s.result} label="result" testId="step-result" /> : null}
         </section>
@@ -69,17 +69,17 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
           <section className="panel" data-testid="token-editor" aria-label="Token editor">
             <h2 className="panel__title">Token</h2>
             <p className="muted">A real RS256 JWT, signed by a throwaway key the lab generated in memory: <strong>mock-issued, not a credential for anything</strong>. Edit the claims and mint, or edit the token text itself: any change breaks the signature.</p>
-            <label>Claims (JSON; iss, aud, iat, nbf and exp are set by the lab's issuer)
+            <label>Claims (JSON; iss, aud, iat, nbf and exp are set by the lab's issuer) <SourceTag source="invented" />
               <textarea rows={8} value={f.claimsText} onChange={(e) => set("claimsText", e.target.value)} data-testid="claims" spellCheck={false} />
             </label>
             <div className="filters">
-              <label>Lifetime (minutes, lab clock)<input type="number" min="1" max="1440" value={f.ttl} onChange={(e) => set("ttl", e.target.value)} data-testid="ttl" /></label>
+              <label>Lifetime (minutes, lab clock) <SourceTag source="invented" /><input type="number" min="1" max="1440" value={f.ttl} onChange={(e) => set("ttl", e.target.value)} data-testid="ttl" /></label>
             </div>
             <div className="seg">
               <button type="button" className="primary" disabled={busy} onClick={() => ev.mint(f).then((t) => t && set("token", t))} data-testid="mint">Mint token</button>
               <button type="button" disabled={!f.token} onClick={() => set("token", tamper(f.token))} data-testid="tamper">Tamper with the token</button>
             </div>
-            <label>Token (labelled mock-issued)
+            <label>Token (labelled mock-issued) <SourceTag source="reading" />
               <textarea rows={4} value={f.token} onChange={(e) => set("token", e.target.value)} data-testid="token" spellCheck={false} placeholder="Mint a token, or paste one" />
             </label>
             {ev.minted ? <p className="muted" data-testid="minted-note">{ev.minted.label}. Expires {ev.minted.expiresAt}.</p> : null}
@@ -87,19 +87,19 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
           <section className="panel" data-testid="request-form" aria-label="Request builder">
             <h2 className="panel__title">Call</h2>
             <div className="filters">
-              <label>Route (surface comes from the prefix)<input value={f.route} onChange={(e) => set("route", e.target.value)} data-testid="route" spellCheck={false} /></label>
-              <label>Tool<input value={f.tool} onChange={(e) => set("tool", e.target.value)} data-testid="tool" spellCheck={false} /></label>
+              <label>Route (surface comes from the prefix) <SourceTag source="deck" /><input value={f.route} onChange={(e) => set("route", e.target.value)} data-testid="route" spellCheck={false} /></label>
+              <label>Tool <SourceTag source="invented" /><input value={f.tool} onChange={(e) => set("tool", e.target.value)} data-testid="tool" spellCheck={false} /></label>
             </div>
-            <label>Arguments (JSON text; parsed strictly, duplicate keys are refused)
+            <label>Arguments (JSON text; parsed strictly, duplicate keys are refused) <SourceTag source="invented" />
               <textarea rows={3} value={f.argumentsText} onChange={(e) => set("argumentsText", e.target.value)} data-testid="arguments" spellCheck={false} />
             </label>
-            <label>Caller-supplied headers (JSON; ignored by every layer, listed in the trace)
+            <label>Caller-supplied headers (JSON; ignored by every layer, listed in the trace) <SourceTag source="reading" />
               <textarea rows={2} value={f.headersText} onChange={(e) => set("headersText", e.target.value)} data-testid="headers" spellCheck={false} />
             </label>
             <div className="filters">
-              <label>Approval reference (optional)<input value={f.approvalRef} onChange={(e) => set("approvalRef", e.target.value)} placeholder="apr-0001" data-testid="approval-ref-input" spellCheck={false} /></label>
-              <label>Simulated upstream reply (optional)<input value={f.simulatedReply} onChange={(e) => set("simulatedReply", e.target.value)} data-testid="reply" spellCheck={false} /></label>
-              <label>Lab fault: make a stage throw
+              <label>Approval reference (optional) <SourceTag source="invented" /><input value={f.approvalRef} onChange={(e) => set("approvalRef", e.target.value)} placeholder="apr-0001" data-testid="approval-ref-input" spellCheck={false} /></label>
+              <label>Simulated upstream reply (optional) <SourceTag source="invented" /><input value={f.simulatedReply} onChange={(e) => set("simulatedReply", e.target.value)} data-testid="reply" spellCheck={false} /></label>
+              <label>Lab fault: make a stage throw <SourceTag source="invented" />
                 <select value={f.labFault} onChange={(e) => set("labFault", e.target.value)} data-testid="fault">{FAULTS.map((x) => <option key={x} value={x}>{x || "none"}</option>)}</select>
               </label>
             </div>

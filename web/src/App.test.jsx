@@ -7,9 +7,9 @@ import { createApp, startHttpServer } from "../../server/src/app.js";
 import { createHealth } from "../../server/src/health.js";
 import { VERTICALS } from "../../server/src/cast.js";
 import App, { BANNER_UNKNOWN, TABS } from "./App";
-import { labelOffsets } from "./components/PatternDiagram";
+import { fitOptions, labelOffsets } from "./components/PatternDiagram";
 import { visible } from "./safeText";
-import { forgetWorkspace } from "./workspace";
+import { forgetWorkspace, workspaceId } from "./workspace";
 import { buildPresets, tamper } from "./presets";
 
 const C = VERTICALS.finance;
@@ -189,5 +189,64 @@ describe("diagram", () => {
   it("the quick starts are built from the cast and every one names its expected answer", () => {
     for (const v of Object.values(VERTICALS)) { const ps = buildPresets(v); expect(ps.length).toBe(18); for (const p of ps) { expect(p.expect).toBeTruthy(); expect(() => JSON.parse(p.request.argumentsText ?? "{}")).not.toThrow(); } }
     expect(visible("a\u202eb")).toContain("\\u202e");
+  });
+});
+
+describe("source tags on every tab (S7)", () => {
+  const tags = () => screen.getAllByTestId("source-tag").map((t) => t.textContent);
+  const KNOWN = ["deck claim", "lab reading", "lab-invented"];
+  it("Evaluate, Approvals, Where it runs, Fail closed and Diagram tag their own fields, not one panel tag", async () => {
+    await mount(); await live(); await click("load-hold");
+    const form = tags(); expect(form.length).toBeGreaterThanOrEqual(10); // the token, claims, route, tool, arguments, headers, reply, fault ...
+    await run("hold");
+    const evaluate = tags(); expect(evaluate.length).toBeGreaterThanOrEqual(form.length + 10); // the decision adds one per layer
+    expect(within(screen.getByTestId("trace-surface")).getByTestId("source-tag")).toHaveTextContent("deck claim");
+    expect(within(screen.getByTestId("trace-token")).getByTestId("source-tag")).toHaveTextContent("lab reading");
+    expect(within(screen.getByTestId("trace-request")).getByTestId("source-tag")).toHaveTextContent("lab-invented");
+    for (const t of evaluate) expect(KNOWN).toContain(t);
+    await tab("Approvals"); await screen.findByTestId("inbox", {}, T);
+    expect(tags().length).toBeGreaterThanOrEqual(6); // act as, level, clock, status, requirements, outbox
+    expect(within(screen.getByTestId("approval-apr-0001")).getAllByTestId("source-tag").length).toBe(2);
+    await tab("Where it runs"); expect(tags().length).toBeGreaterThanOrEqual(4);
+    expect(within(screen.getByTestId("where-table")).getAllByTestId("source-tag").length).toBe(3);
+    await tab("Fail closed"); expect(tags().length).toBeGreaterThanOrEqual(7); // six rules and the canonical form
+    expect(within(screen.getByTestId("fail-rules")).getAllByTestId("source-tag").length).toBe(6);
+    await tab("Diagram"); await screen.findByTestId("pattern-canvas", {}, T);
+    expect(within(screen.getByTestId("pattern-sources")).getAllByTestId("source-tag").length).toBe(3);
+    for (const t of tags()) expect(KNOWN).toContain(t);
+  });
+  it("the same tags are there in Mock", async () => {
+    await mount(); await click("scenario-hold-and-retry"); await click("step-0");
+    expect(tags().length).toBeGreaterThanOrEqual(12);
+  });
+});
+
+describe("a stored workspace id the server refuses (N1)", () => {
+  it("is replaced and the request retried once: the tab loads, the id changes, and Reset works", async () => {
+    window.sessionStorage.setItem("aip.workspace", "a1b2c3d4e5f6a7b8c9d0e1f2"); // passes the browser's pattern, looks like a credential to the server
+    await mount();
+    expect(screen.queryByText(/Could not load the lab/)).toBeNull();
+    expect(window.sessionStorage.getItem("aip.workspace")).toMatch(/^w-[0-9a-f]{16}$/);
+    expect(workspaceId()).toBe(window.sessionStorage.getItem("aip.workspace"));
+    const stateCalls = seen.filter((s) => s.url.includes("/api/state"));
+    expect(stateCalls.length).toBeGreaterThanOrEqual(2); // the refused one and the retry
+    await live(); await run("hold"); await click("reset");
+    await waitFor(() => expect(screen.getByTestId("form-empty")).toBeInTheDocument(), T);
+    expect(screen.queryByText(/Could not load the lab/)).toBeNull();
+  });
+  it("a refusal that is not bad_workspace is not retried", async () => {
+    override = (u) => (u.includes("/api/info") ? new Response(JSON.stringify({ error: "bad_request" }), { status: 400, headers: { "content-type": "application/json" } }) : null);
+    window.sessionStorage.setItem("aip.workspace", "w-aaaaaaaaaaaaaaaa"); const before = "w-aaaaaaaaaaaaaaaa";
+    render(<App />); await waitFor(() => expect(seen.some((s) => s.url.includes("/api/info"))).toBe(true), T);
+    expect(seen.filter((s) => s.url.includes("/api/info")).length).toBe(1);
+    expect(window.sessionStorage.getItem("aip.workspace")).toBe(before);
+  });
+});
+
+describe("diagram view at phone width (N2)", () => {
+  it("fits every box: the narrow view has no node subset and can zoom out; the wide view is unchanged", () => {
+    const narrow = fitOptions(true);
+    expect(narrow.nodes).toBeUndefined(); expect(narrow.maxZoom).toBeUndefined(); expect(narrow.minZoom).toBeLessThanOrEqual(0.15);
+    expect(fitOptions(false)).toEqual({ padding: 0.12 });
   });
 });

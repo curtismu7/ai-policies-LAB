@@ -88,7 +88,8 @@ summary { cursor: pointer; font-weight: 700; font-size: 14px; }
 .pat-elabel[data-now="true"] { border-color: var(--focus); font-weight: 700; }
 .pat-elabel[data-dim="true"] { opacity: 0.55; }
 @media (max-width: 900px) { .pat-canvas { height: 520px; } }
-@media (max-width: 600px) { .pat-node { font-size: 15px; } .pat-elabel { font-size: 15px; } .head__title { font-size: 18px; } .pat-canvas { height: 560px; } .panel { padding: 10px; } }
+.pat-hint { display: none; }
+@media (max-width: 600px) { .pat-node { font-size: 15px; } .pat-elabel { font-size: 15px; } .head__title { font-size: 18px; } .pat-canvas { height: 300px; } .pat-hint { display: block; } .panel { padding: 10px; } }
 
 .last { margin-top: 12px; }
 .tag { margin: 2px 4px 2px 0; }
