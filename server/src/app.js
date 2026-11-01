@@ -127,7 +127,7 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
 
   if (fs.existsSync(path.join(webDist, 'index.html'))) {
     app.use(express.static(webDist));
-    app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => (isPagePath(req.path) ? res.sendFile(path.join(webDist, 'index.html')) : next()));
+    app.get(/^\/(?!api\/).*/, (req, res, next) => (isPagePath(req.path) ? res.sendFile(path.join(webDist, 'index.html')) : next()));
   }
   // The last two handlers catch everything that is left, for every method and every path: Express's default answers ("Cannot POST /<path>", or an
   // HTML stack trace with file paths) would echo the path the visitor typed, which may be a token. Fixed JSON, no path.

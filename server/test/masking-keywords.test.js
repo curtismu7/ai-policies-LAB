@@ -100,6 +100,8 @@ test('the shapeless-keyword rule is bounded: a bare keyword masks only a value t
   assert.equal(cleanFree('password hunter_xyz'), '[masked:assignment]', 'a symbol');
   assert.equal(cleanFree('password 2026-11-02'), 'password 2026-11-02', 'a date is not a secret');
   assert.equal(cleanFree('Session: standup'), 'Session: standup');
+  assert.equal(cleanFree('session: Ab1x2'), 'session: Ab1x2', 'a session value of five characters is not enough');
+  assert.equal(cleanFree('session: Ab1x23'), '[masked:assignment]', 'six is');
   assert.equal(cleanFree('Session: Q3-review2'), '[masked:assignment]', 'a session value with a digit is treated as a cookie: a known false positive');
 });
 
@@ -149,4 +151,10 @@ test('a key NAMED session (or sid) hides its value whatever the value looks like
       assert.equal(m.status, 400, name); assert.equal((await m.json()).error, 'bad_claim_name', name);
     }
   });
+});
+
+test('the response mask does not apply the long-run detectors: a long mixed id in an answer is shown as it is, while the same text typed in is masked as key-like', () => {
+  const id = 'payments-report-2026-q4-final-v2';
+  assert.equal(maskDeep({ x: id }).x, id);
+  assert.match(cleanFree(id), /\[masked:key-like\]/);
 });

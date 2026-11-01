@@ -122,7 +122,7 @@ npm test    # server (node --test), web (vitest, drives the UI against the real 
 
 The shared checks are run by hand, because the scripts are not shipped into this repo's CI: `bash <AI-DEMO-Standalone>/scripts/check-drift.sh .`, `bash <AI-DEMO-Standalone>/scripts/check-css.sh .` and `node <demo-kit-base>/scripts/conformance.mjs . --new`.
 
-On Node 26: TESTCOUNT
+On Node 26: 304 tests pass (260 server, 21 web, 23 scripts).
 
 ## Troubleshooting
 
@@ -142,6 +142,8 @@ On Node 26: TESTCOUNT
 ## Known equivalent mutants
 
 Mutation testing of this lab leaves a few changes that cannot be told from the original by any input, so no test can kill them: `>=` against `>` where an approval grant ends inside `grantProblem` (the sweep that runs first already marks it expired at that instant); the end-user-only or requester-only half of the self-approval check (the requester is the end user whenever one exists, and an agent identity is never a person); and dropping the issuer or audience check in token verification (only the lab's own key signs, and it always sets both). The deliberate 4xx answers (403 holds and denials, 401 bad tokens, 409 and 422 refusals, 405) are logged by the browser as console messages: those are the only console errors.
+
+Mutation testing (a hand-run list, not part of CI): 75 changes to the masking, control-character, route, inspection, cap, signer, limit and web code were applied one at a time; 69 were caught by the tests and the 6 that survived are equivalent changes (the five above and a no-op edit of a route regex that Express never reaches).
 
 ## Not done
 
