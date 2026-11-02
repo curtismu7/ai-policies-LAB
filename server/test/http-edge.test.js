@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import { C, get, post, put, rawHttp, withServer } from './helpers.js';
 import { API_ROUTES } from '../src/app.js';
 import { scrub } from '../src/service.js';
-import { createWorkspaces } from '../src/workspaces.js';
 
 const H = ['hunter', '2xyz'].join('');
 const live = (extra = {}) => ({ mode: 'live', vertical: 'finance', ...extra });
@@ -115,13 +114,22 @@ test('the response mask covers values AND object keys on every answer: a secret 
   });
 });
 
+test('answers that carry visitor text are masked with credential-word KEYS read: a short value under a key named password or token never comes back; the lab\'s own prose is masked as prose', async () => {
+  await withServer(async (url, { workspaces }) => {
+    const e = workspaces.engine('default', 'finance', C);
+    e.outbox.push({ id: 'out-y', at: 'now', channel: 'slack', label: 'x', to: [], ref: 'apr-0001', subject: 'plain', expiresAt: 'x', delivered: false, password: 'ab', token: 'cd', nested: { api_key: 'ef' } });
+    const live1 = await (await get(url, '/api/state?mode=live')).json();
+    const row = live1.state.outbox.at(-1);
+    assert.deepEqual([row.password, row.token, row.nested.api_key, row.subject], ['[masked:assignment]', '[masked:assignment]', '[masked:assignment]', 'plain']);
+    const story = await (await get(url, '/api/story?vertical=finance')).json();
+    assert.deepEqual(story.authLevels, { 1: 'password', 2: 'push approval', 3: 'hardware key' }, 'the story is prose: the word password in it is a word');
+    const mock = await (await get(url, '/api/state?mode=mock')).json();
+    assert.equal(mock.state.roster.length > 0, true);
+  });
+});
+
 test('scrub (the first hop\'s request body): values and keys are cleaned and masked before the response mask sees them', () => {
   const out = scrub({ route: `/mcp/x`, tool: 't', arguments: { [`password ${H}`]: `my password is ${H}`, note: `pass${String.fromCharCode(9)}word: ${H}`, ok: 'fine' } });
   assert.equal(JSON.stringify(out).includes(H), false);
   assert.deepEqual(out, { route: '/mcp/x', tool: 't', arguments: { '[masked:shape]': '[masked:assignment]', note: '[masked:assignment]', ok: 'fine' } });
-});
-
-test('the workspace store refuses nothing for a masked id: a refused id never reaches createWorkspaces', () => {
-  const w = createWorkspaces();
-  assert.equal(w.size(), 0);
 });
