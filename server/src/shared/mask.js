@@ -1,3 +1,4 @@
+// Copied unchanged from shared-masker 1.4.0 (commit 9bc664a), mask.js, below this line. Do not edit here: change the canonical module and copy again.
 // shared-masker/mask.js - the canonical masker for the Ping standalone demo family.
 //
 // Dependency-free ES module (Node 26; also bundleable for the browser: it uses only String.prototype.normalize, RegExp with \p{..}, Map, Set, WeakSet).

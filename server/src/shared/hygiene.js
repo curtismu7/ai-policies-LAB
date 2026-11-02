@@ -1,3 +1,4 @@
+// Copied unchanged from shared-masker 1.4.0 (commit 9bc664a), hygiene.js, below this line. Do not edit here: change the canonical module and copy again.
 // shared-masker/hygiene.js - small pure helpers for the HTTP edge of the standalone demo apps. No dependencies, no I/O, never throws on malformed input.
 // Pair with mask.js. docs/EXPRESS-RECIPE.md shows the wiring.
 import { isCredentialId, maskText, createStats } from './mask.js';

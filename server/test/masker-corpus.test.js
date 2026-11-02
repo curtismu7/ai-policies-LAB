@@ -83,3 +83,13 @@ test('options.json through the vendored createMasker: every row gives exactly th
   }
   assert.deepEqual(failures, []);
 });
+
+test('the vendored files say which shared-masker commit they were copied from, and carry the 1.4.0 API', async () => {
+  for (const f of ['mask', 'hygiene']) {
+    const first = readFileSync(new URL(`../src/shared/${f}.js`, import.meta.url), 'utf8').split('\n', 1)[0];
+    assert.equal(first, `// Copied unchanged from shared-masker 1.4.0 (commit 9bc664a), ${f}.js, below this line. Do not edit here: change the canonical module and copy again.`);
+  }
+  const m = await import('../src/shared/mask.js'); const h = await import('../src/shared/hygiene.js');
+  assert.deepEqual(['createMasker', 'isCredentialId', 'looksLikeCredential', 'maskDeep', 'maskText'].filter((k) => typeof m[k] !== 'function'), []);
+  assert.deepEqual(['buildMethodTable', 'charsetProblem', 'isPageAddress', 'methodNotAllowed'].filter((k) => typeof h[k] !== 'function'), []);
+});
