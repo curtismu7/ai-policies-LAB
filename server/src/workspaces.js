@@ -3,7 +3,7 @@
 // The browser sends its id in X-Workspace (default "default"). Reset clears the current workspace only.
 import { Engine } from './engine.js';
 import { refuse } from './errors.js';
-import { looksLikeCredential } from './credentials.js';
+import { isCredentialId } from './credentials.js';
 
 export const WORKSPACE_RE = /^[a-z0-9-]{1,40}$/;
 export const DEFAULT_WORKSPACE = 'default';
@@ -11,8 +11,9 @@ export const DEFAULT_WORKSPACE = 'default';
 export function workspaceFrom(req) {
   const raw = req.headers['x-workspace'];
   if (raw === undefined) return DEFAULT_WORKSPACE;
-  // An id that looks like a credential (a 40-hex token, a long mixed run) is refused rather than echoed back in the `workspace` field and the hop headers.
-  return typeof raw === 'string' && WORKSPACE_RE.test(raw) && !looksLikeCredential(raw) ? raw : null;
+  // An id that looks like a credential (a 40-hex token, a long mixed run, a pw-/token-/sk- prefix: isCredentialId) is refused rather than echoed back in the `workspace`
+  // field and the hop headers. The check comes before any workspace slot exists: a slot is created only inside a write, after this.
+  return typeof raw === 'string' && WORKSPACE_RE.test(raw) && !isCredentialId(raw) ? raw : null;
 }
 
 export function createWorkspaces({ max = 500, ttlMs = 60 * 60 * 1000, now = Date.now } = {}) {

@@ -17,14 +17,14 @@ const withDist = async (fn) => {
 test('S2: the page answers only for a path that can be a page; a missing file, map, icon or asset is the fixed JSON 404 (for GET and HEAD)', async () => {
   await withDist(async (url, host) => {
     for (const p of ['/', '/policies', '/approvals', '/a/b/c', '/x.y/z']) {
-      const r = await rawHttp(`${url}${p}`, { headers: { host } });
+      const r = await rawHttp(`${url}${p}`, { headers: { host, accept: 'text/html' } });
       assert.equal(r.status, 200, p); assert.match(r.headers['content-type'], /text\/html/, p); assert.match(r.text, /the page/, p);
     }
     for (const p of ['/assets/missing.js', '/favicon.ico', '/robots.txt', '/static/x.png', '/foo.map', '/%E0%A4%A', '/.git/config', '/a/.env', '/sitemap.xml', '/api', '/assets/missing.js?x=1']) {
-      const r = await rawHttp(`${url}${p}`, { headers: { host } });
+      const r = await rawHttp(`${url}${p}`, { headers: { host, accept: 'text/html' } });
       assert.equal(r.status, 404, p); assert.match(r.headers['content-type'], /application\/json/, p); assert.deepEqual(JSON.parse(r.text), { error: 'not_found' }, p);
     }
-    const head = await rawHttp(`${url}/foo.map`, { method: 'HEAD', headers: { host } });
+    const head = await rawHttp(`${url}/foo.map`, { method: 'HEAD', headers: { host, accept: 'text/html' } });
     assert.equal(head.status, 404);
     const real = await rawHttp(`${url}/assets/real.js`, { headers: { host } });
     assert.equal(real.status, 200); assert.match(real.headers['content-type'], /javascript/); assert.equal(real.text, 'console.log(1)');
@@ -34,7 +34,9 @@ test('S2: the page answers only for a path that can be a page; a missing file, m
 // A request that is right for its route: what each route takes, so the method that IS allowed is never answered 405.
 const GOOD = { GET: [''], POST: ['{}'], PUT: ['{}'] };
 const SAMPLE = { story: '/api/story', diagram: '/api/diagram', info: '/api/info', jwks: '/api/jwks', state: '/api/state', canonicalize: '/api/canonicalize', evaluate: '/api/evaluate', token: '/api/token', clock: '/api/clock', reset: '/api/reset' };
-const ROUTES = [...Object.values(SAMPLE).map((p) => [p, API_ROUTES.find(([re]) => re.test(p.slice(4)))?.[1]]), ['/api/approvals/apr-0001/decision', 'POST'], ['/api/policies/apps', 'PUT'], ['/api/policies/apps/reset', 'POST']];
+// the method each sample path takes, read from the route table (exact keys, and ":name" keys as one segment)
+const tableMethod = (p) => { for (const [k, m] of Object.entries(API_ROUTES)) if (new RegExp(`^${k.replace(/:[a-z]+/g, '[^/]+')}$`).test(p)) return m.find((x) => x !== 'HEAD'); return undefined; };
+const ROUTES = [...Object.values(SAMPLE), '/api/approvals/apr-0001/decision', '/api/policies/apps', '/api/policies/apps/reset'].map((p) => [p, tableMethod(p)]);
 
 test('S3: every /api route answers 405 with Allow for any other method, and its own method is never 405', async () => {
   await withServer(async (url, ) => {
