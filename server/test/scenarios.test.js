@@ -4,7 +4,7 @@ import { VERTICALS } from '../src/cast.js';
 import { EXPECTED, buildMockTable, canonicalExamples, runScenario, scenarioList } from '../src/scenarios.js';
 import { MOCK_TABLE } from '../src/mockTable.js';
 import { mockState } from '../src/service.js';
-import { findCredentials } from '../src/credentials.js';
+import { maskProse } from '../src/mask.js';
 import { scanHosts } from '../src/safety.js';
 import { withServer, post, json } from './helpers.js';
 
@@ -45,7 +45,8 @@ test('the canonical examples: four spellings, one hash; a different value, anoth
 });
 test('the Mock table carries no credential-shaped text and no real host', () => {
   const t = JSON.stringify(MOCK_TABLE).replace(/"(hash|callHash)":"[0-9a-f]{64}"/g, '').replace(/"bound":\{"kind":"call","callHash":"[0-9a-f]{64}"/g, '');
-  assert.deepEqual(findCredentials(t), []); assert.deepEqual(scanHosts(t), []);
+  // the table is walked value by value and key by key (the JSON text as one string is not a document the masker reads as data), with the lab's own hashes and trace ids left as they are
+  assert.deepEqual(maskProse(MOCK_TABLE), MOCK_TABLE); assert.deepEqual(scanHosts(t), []);
 });
 
 test('HTTP replay: every scripted step, sent through the real Live API in all three verticals, gives the result the Mock table records (the table is not only a replay of the same Engine object)', async () => {

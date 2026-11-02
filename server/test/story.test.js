@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { DEFAULT_CAST, VERTICALS } from '../src/cast.js';
 import { buildStory, renderTalkTrackMarkdown } from '../src/story.js';
 import { BANNER, CLAIM_LABEL, CLAIMS, FIELD_SOURCES, NOT_DEMONSTRATED, TALK_TRACK, WHY } from '../src/data.js';
-import { maskDeep } from '../src/mask.js';
+import { maskProse } from '../src/mask.js';
 import { DIAGRAM_NAMES, buildDiagram, loadDiagram, rawDiagram } from '../src/diagramData.js';
 import { validateDiagram } from '../src/diagramStudioValidate.js';
 
@@ -42,10 +42,10 @@ test('docs/talk-track.md is exactly what the generator makes (no drift)', () => 
   assert.equal(text, renderTalkTrackMarkdown(DEFAULT_CAST)); assert.ok(!/\{\{/.test(text));
 });
 test('the response mask leaves every vertical\'s story untouched (it only changes credential-shaped values)', () => {
-  for (const [v, c] of Object.entries(VERTICALS)) { const s = buildStory(c, v); assert.deepEqual(maskDeep(s), s, v); }
+  for (const [v, c] of Object.entries(VERTICALS)) { const s = buildStory(c, v); assert.deepEqual(maskProse(s), s, v); }
 });
 test('the response mask leaves every diagram, in every vertical, untouched (a phrase like "the token is ..." would be masked)', () => {
-  for (const [v, c] of Object.entries(VERTICALS)) for (const n of DIAGRAM_NAMES) { const d = buildDiagram(c, n); assert.deepEqual(maskDeep(d), d, `${v}/${n}`); }
+  for (const [v, c] of Object.entries(VERTICALS)) for (const n of DIAGRAM_NAMES) { const d = buildDiagram(c, n); assert.deepEqual(maskProse(d), d, `${v}/${n}`); }
 });
 test('the diagrams are diagram-studio/1 data, valid, loaded by name, with no overlapping node positions', () => {
   assert.deepEqual(DIAGRAM_NAMES, ['layers-and-hold', 'where-it-runs']);

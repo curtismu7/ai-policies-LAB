@@ -19,7 +19,7 @@ import { buildCatalog, hasApp, hasTool, parseRoute } from './catalog.js';
 import { callHash, METHODS, normalizeArguments } from './canon.js';
 import { jwks } from './token.js';
 import { shown } from './engine.js';
-import { maskDeep } from './mask.js';
+import { maskDeep, maskProse } from './mask.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
@@ -45,8 +45,10 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
   app.use((_req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); next(); });
 
   const api = express.Router();
-  // Defence in depth: every JSON answer is masked for credential-shaped values, whatever path produced it.
-  api.use((_req, res, next) => { const send = res.json.bind(res); res.json = (b) => send(maskDeep(b)); next(); });
+  // Defence in depth: every JSON answer is masked for credential-shaped values, whatever path produced it (values AND object keys). The answers that hold only the lab's
+  // own text (story, diagram, info, the Mock tables; /jwks keeps the strong reading because the shared masker knows a public JWK) set res.locals.labData and are masked as prose (see mask.js); every other answer, including everything that
+  // carries what a visitor typed, is masked with credential-word keys read.
+  api.use((_req, res, next) => { const send = res.json.bind(res); res.json = (b) => send((res.locals.labData ? maskProse : maskDeep)(b)); next(); });
   api.use((req, res, next) => {
     const hit = API_ROUTES.find(([re]) => re.test(req.path));
     if (!hit || req.method === hit[1] || req.method === 'OPTIONS' || (hit[1] === 'GET' && req.method === 'HEAD')) return next();
@@ -57,19 +59,20 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
   const verticalOf = (req) => verticalFrom(req.body?.vertical ?? req.query.vertical);
   const castFor = (req) => loadCast(configFile, verticalOf(req));
   const noStore = (res) => res.set('Cache-Control', 'no-store');
+  const labData = (res) => { res.locals.labData = true; };
   const ws = (req, res) => { const id = workspaceFrom(req); if (!id) res.status(400).json({ error: 'bad_workspace' }); return id; };
   const bodyOf = (req) => (isObj(req.body) ? req.body : {});
 
-  api.get('/story', (req, res) => { noStore(res); res.json(buildStory(castFor(req), verticalOf(req))); });
-  api.get('/diagram', (req, res) => { noStore(res); res.json(buildDiagram(castFor(req), DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0])); });
-  api.get('/info', (_req, res) => { noStore(res); res.json({ mode: defaultMode(), modes: ['mock', 'live'], simulated: true, release: '2026-11-02', unverified: true }); });
+  api.get('/story', (req, res) => { noStore(res); labData(res); res.json(buildStory(castFor(req), verticalOf(req))); });
+  api.get('/diagram', (req, res) => { noStore(res); labData(res); res.json(buildDiagram(castFor(req), DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0])); });
+  api.get('/info', (_req, res) => { noStore(res); labData(res); res.json({ mode: defaultMode(), modes: ['mock', 'live'], simulated: true, release: '2026-11-02', unverified: true }); });
 
   api.get('/state', (req, res) => {
     const id = ws(req, res); if (!id) return;
     noStore(res);
     const mode = modeOf(req.query.mode); if (!mode) return res.status(400).json({ error: 'bad_mode', detail: 'mode must be mock or live' });
     const vertical = verticalOf(req);
-    if (mode === 'mock') return res.json({ mode, vertical, workspace: id, ...mockState(table, vertical, req.query.scenario) });
+    if (mode === 'mock') { labData(res); return res.json({ mode, vertical, workspace: id, ...mockState(table, vertical, req.query.scenario) }); }
     return res.json({ mode, vertical, workspace: id, state: liveState(id, workspaces, vertical, castFor(req)) });
   });
 

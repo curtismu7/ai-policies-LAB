@@ -6,7 +6,7 @@
 // The text is normalised first (NFKC, invisible and control characters deleted, percent-decoded, spaces collapsed) so interleaving cannot hide a finding. A finding
 // names its KIND and WHERE, never the value. The WHOLE text is read (up to the scan limit in credentials.js; the engine refuses a reply longer than that instead of
 // reading part of it), the argument KEYS are read as well as the values, and numbers are read as the digits they print as.
-import { findCredentials, normalizeForMatching } from './credentials.js';
+import { looksLikeCredential, normalizeForMatching } from './credentials.js';
 
 const PHRASES = ['ignore previous instructions', 'ignore all previous', 'ignore the above', 'disregard the above', 'disregard all previous', 'reveal your system prompt', 'forget your instructions'];
 
@@ -23,7 +23,7 @@ export function findingKinds(text) {
   for (const m of t.matchAll(/\d(?:[ -]?\d){12,18}/g)) { const d = m[0].replace(/\D/g, ''); if (d.length >= 13 && d.length <= 19 && luhn(d)) kinds.add('card-number'); }
   const low = t.toLowerCase();
   if (PHRASES.some((p) => low.includes(p))) kinds.add('injection');
-  if (findCredentials(t).length) kinds.add('secret');
+  if (looksLikeCredential(String(text))) kinds.add('secret');
   return [...kinds];
 }
 

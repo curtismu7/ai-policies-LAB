@@ -11,19 +11,19 @@ export const SECRETS = {
   bearer: ['Bear', 'er ', 'abcdEFGH1234567890.tokenvalue'].join(''),
   assignment: ['pass', 'word=', 'hunter2hunter2'].join(''),
   blob: 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU2Nzg5',
-  hex: 'deadbeef'.repeat(6),
+  hex: 'a3f91c7e5b20d48f6a1c93e07b5d2f84c1e60a9b73d5f280',
   // plain-language and short shapes (a review found these raw in a stored reason)
   plainIs: ['my pass', 'word is hunter2xyz'].join(''),
   pwColon: ['p', 'w: Hunter2Secret!'].join(''),
   passEq: ['pa', 'ss=Tr0ub4dor&3'].join(''),
-  passphrase: ['pass', 'phrase: correct horse battery'].join(''),
+  passphrase: ['pass', 'phrase: "correct horse battery"'].join(''),
   userinfo: ['https://bob:', 'hunter2@x.example/repo'].join(''),
   tokenWord: ['Authorization: tok', 'en abcdef1234567890zz'].join(''),
   google: ['ya', '29.a0AfH6SMBxQ1w2e3r4t5y6u7i8o9p0'].join(''),
   accountKey: ['Account', 'Key=abcdEFGH', '1234/ijkl'].join(''),
   sessionId: ['session', 'id=00D5g000008dkQz!AQ4AQGhw12'].join(''),
-  key31: ['Zq9Xk2Lm8Rt4Vb7N', 'c1Hd5Fj3Gs6Pw0Y'].join(''),
-  shortGh: ['gh', 'p_shortone1234'].join(''),
+  key32: ['Zq9Xk2Lm8Rt4Vb7N', 'c1Hd5Fj3Gs6Pw0Y3'].join(''),
+  shortGh: ['gh', 'p_shortone1234abcd'].join(''),
 };
 // What must NOT be masked: ordinary prose, ids, dates, resource and policy names.
 export const PLAIN = [

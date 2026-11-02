@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { C, get, post, withServer } from './helpers.js';
 import { sweep } from './sweep.js';
-import { cleanFree, findCredentials, normalizeForMatching } from '../src/credentials.js';
+import { cleanFree, looksLikeCredential, normalizeForMatching } from '../src/credentials.js';
 import { maskDeep } from '../src/mask.js';
 import { shown } from '../src/engine.js';
 
@@ -69,11 +69,11 @@ test('percent-encoded credentials (plain, once, twice) typed into every field of
     }
   });
 });
-test('the encoded forms are shown decoded and masked, not as typed', () => {
-  assert.equal(cleanFree('my%20password%20is%20hunter2hunter2'), 'my [masked:assignment]');
+test('an encoded credential is masked; text that is only encoded is shown as typed (the shared masker no longer rewrites it)', () => {
+  assert.equal(cleanFree('my%20password%20is%20hunter2hunter2'), 'my%20[masked:phrase]');
   assert.ok(!cleanFree('my%2520password%2520is%2520hunter2hunter2').includes('hunter2'));
   assert.ok(!cleanFree('https%3A%2F%2Falice%3As3cretPW99%40host.example').includes('s3cretPW99'));
-  assert.equal(cleanFree('100%25 sure'), '100% sure', 'a literal percent sign survives');
+  assert.equal(cleanFree('100%25 sure'), '100%25 sure', 'a literal percent sign stays as typed');
   assert.equal(cleanFree('%E0%A4%A bad'), '%E0%A4%A bad', 'malformed encoding is left alone');
 });
 
@@ -92,7 +92,7 @@ test('key-aware masking: a credential word as a key masks its value in any quoti
     assert.ok(!cleanFree(text).includes(probe), `cleanFree: ${text}`);
     assert.ok(!JSON.stringify(maskDeep({ x: text })).includes(probe), `mask: ${text}`);
   }
-  assert.ok(findCredentials('{"password":"hunter2hunter2"}').length > 0);
+  assert.ok(looksLikeCredential('{"password":"hunter2hunter2"}'));
 });
 test('key-aware masking leaves ordinary JSON, ids and prose alone (no false positives)', () => {
   for (const t of ['{"record":"payee-1042","newValue":"payee-9917"}', '{"query":"the token requirements and the password policy"}', 'passing the review needs sign-off', '{"amount":25000,"note":"pin the release"}', 'the pin is required', '{"author":"maya.chen"}']) assert.equal(cleanFree(t), t, t);

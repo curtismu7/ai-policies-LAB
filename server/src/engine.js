@@ -16,7 +16,8 @@ import { InputError, refuse } from './errors.js';
 import { buildCatalog, hasApp, hasTool, parseRoute, SURFACES, CHANNELS } from './catalog.js';
 import { buildRoster } from './cast.js';
 import { callHash, canonicalJson, METHODS, normalizeArguments } from './canon.js';
-import { cleanFree, cleanUnderKey, findCredentials, isCredentialKey, looksLikeCredential, MAX_SCAN, normalizeForMatching } from './credentials.js';
+import { cleanFree, cleanUnderKey, isCredentialKey, looksLikeCredential, MAX_SCAN } from './credentials.js';
+import { maskDeep } from './mask.js';
 import { findingKinds, findingsIn, normalizeText } from './inspect.js';
 import { defaultPolicy, validateLayer, LAYERS, OPS } from './policies.js';
 import { mint, verifyToken, MAX_TTL_MIN } from './token.js';
@@ -440,13 +441,18 @@ export class Engine {
   }
 }
 
-// The text the page shows for the canonical form: as it is hashed, unless it hides a credential-shaped value (zero-width characters interleaved, say): then
-// the masked copy is shown instead. Masked BEFORE it is cut. The canonical form is JSON, which writes a control character as an escape (\u0000, \b, \f), so the
-// escapes are turned back into the characters they stand for before the text is matched, or a control character inside a keyword would hide it.
-const jsonUnescape = (text) => text.replace(/\\(?:u([0-9a-fA-F]{4})|([^u]))/g, (m, hex, ch) => (hex ? String.fromCharCode(parseInt(hex, 16)) : ch === 'b' ? '\b' : ch === 'f' ? '\f' : m));
+// The text the page shows for the canonical form: as it is hashed, unless it hides a credential-shaped value (a keyword with a TAB or a zero-width character inside, a key
+// that is itself a secret, a quoted passphrase): then the masked copy is shown instead. The canonical form is JSON, so it is parsed and its DATA is masked (values and keys,
+// the way the shared masker reads a document: a TAB is the two characters \t in the text, one character in the data) and written again; the text is only matched as text when
+// it is not JSON. Masked BEFORE it is cut.
 export function shown(text, max) {
-  const plain = jsonUnescape(text);
-  return findCredentials(normalizeForMatching(plain)).length ? cleanFree(plain, max) : text.slice(0, max);
+  let doc;
+  try { doc = JSON.parse(text); } catch { doc = undefined; }
+  if (doc !== undefined) {
+    const masked = JSON.stringify(maskDeep(doc));
+    if (masked !== JSON.stringify(doc)) return cleanFree(masked, max);
+  }
+  return looksLikeCredential(text) ? cleanFree(text, max) : text.slice(0, max);
 }
 
 // The claims as shown on the page: only well-known claim values are shown as they are, the rest as types; credential-shaped strings never reach here (mint refuses them).
