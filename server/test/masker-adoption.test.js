@@ -99,13 +99,15 @@ test('cleanUnderKey: a credential-word key masks a string, a number and a boolea
   assert.equal(cleanUnderKey('password', 12, 300), '[masked:assignment]');
   assert.equal(cleanUnderKey('password', true, 300), '[masked:assignment]');
   assert.equal(cleanUnderKey('amount', 12, 300), 12);
-  assert.equal(cleanUnderKey('note', 'a\u0000 b', 300), 'a b');
+  assert.equal(cleanUnderKey('note', 'a\u0000b', 300), 'a b');
   assert.equal(cleanUnderKey('note', `my password is ${H}`, 300), 'my [masked:phrase]');
   assert.equal(cleanUnderKey('note', 'abcdef', 3), 'abc');
 });
 
 test('cleanFree: masks first, then tidies (invisible and control characters deleted, white space collapsed) and cuts; never splits a surrogate pair; never throws', () => {
-  assert.equal(cleanFree(`a${ch(0x200b)}b\n\n c\t d `), 'ab c d');
+  assert.equal(cleanFree(`a${ch(0x200b)}b\n\n c\t d `), `a${ch(0x200b)}b c d`, 'a zero-width space stays; white space collapses');
+  assert.equal(cleanFree(`a${ch(0)}b${ch(0x202e)}c`), 'a b c', 'a control and a bidi control each become ONE space');
+  assert.equal(cleanFree(`password=other9abc note=${[...'hunter2xyz'].join(ch(0x200b))}`), `[masked:assignment] note=${[...'hunter2xyz'].join(ch(0x200b))}`, 'a value that is merely hidden next to a mask is not made readable');
   assert.equal(cleanFree('x'.repeat(2000)).length, MAX_FREE);
   const cut = cleanFree('a'.repeat(399) + '\u{1f600}', 400);
   assert.equal(cut, 'a'.repeat(399), 'the half of an emoji at the cut is dropped, not kept as a lone surrogate');

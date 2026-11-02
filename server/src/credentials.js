@@ -8,8 +8,10 @@ export const MAX_FREE = 400;
 export const MAX_SCAN = 200000;
 export { isCredentialId, looksLikeCredential, maskText };
 
-const INVISIBLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}�]/gu;
+const INVISIBLE = /[\p{Default_Ignorable_Code_Point}\p{Cf}\u{fffd}]/gu;
 const CONTROLS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
+// C0 and C1 controls (not tab, line feed, carriage return) and the bidirectional controls: made inert by cleanFree
+const INERT = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 const SEPARATORS = /[\t\n\r\u2028\u2029]/g;
 const PERCENT_RUN = /(?:%[0-9a-fA-F]{2})+/g;
 const strip = (s) => s.replace(INVISIBLE, '').normalize('NFKC').replace(INVISIBLE, '').replace(CONTROLS, '');
@@ -42,10 +44,11 @@ export function cleanUnderKey(key, value, max) {
 }
 
 // Free text from the visitor: masked as typed (the shared masker reads invisible characters, controls, look-alikes, encodings and line breaks itself, and masks the whole
-// text BEFORE anything is cut, so a token that straddles the cut is masked, not half shown), then tidied for display (invisible and control characters deleted, white space
-// collapsed) and cut to length without splitting a surrogate pair.
+// text BEFORE anything is cut, so a token that straddles the cut is masked, not half shown), then made inert for display and cut to length without splitting a surrogate
+// pair. Inert: each control or bidi-control character becomes ONE SPACE and white space collapses to one space. Nothing is ever DELETED: the masker only rewrites what it
+// found (a value that is merely hidden next to a mask must not become readable), and deleting the characters between the letters of a value it did not find would do exactly that.
 export function cleanFree(value, max = MAX_FREE) {
   const masked = maskText(typeof value === 'string' ? value : String(value ?? ''));
-  const tidy = masked.replace(INVISIBLE, '').replace(CONTROLS, '').replace(/\s+/g, ' ').trim();
+  const tidy = masked.replace(INERT, ' ').replace(/\s+/g, ' ').trim();
   return tidy.slice(0, max).replace(/[\uD800-\uDBFF]$/, '');
 }

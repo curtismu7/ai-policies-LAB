@@ -16,7 +16,7 @@ test('every credential shape is found and masked', () => {
 test('cleanFree: masks, strips control and bidi characters, collapses space, caps, and never throws', () => {
   const v = SECRETS.github;
   assert.ok(!cleanFree(`token ${v}`).includes(v));
-  assert.equal(cleanFree('a\u0000b\u202ec  d'), 'abc d', 'a control character and a bidi character are deleted, whitespace collapses');
+  assert.equal(cleanFree('a\u0000b\u202ec  d'), 'a b c d', 'a control character and a bidi character each become one space (never deleted), white space collapses');
   assert.equal(cleanFree('line one\nline\ttwo\r\nthree\u2028four'), 'line one line two three four', 'tab, line breaks and U+2028 are separators');
   assert.equal(cleanFree('x'.repeat(5000)).length <= MAX_FREE, true);
   assert.equal(cleanFree(undefined), ''); assert.equal(cleanFree(null), ''); assert.equal(cleanFree({}), '[object Object]');
@@ -80,14 +80,14 @@ test('masking happens BEFORE the cut to length: a token that straddles the limit
   assert.ok(!cleanFree(`${'a'.repeat(19990)} ${v}`, 400).includes('ghp_'));
 });
 
-test('zero-width and soft-hyphen characters interleaved through a token cannot hide it: they are deleted before masking', () => {
+test('zero-width and soft-hyphen characters interleaved through a token cannot hide it: the masker reads through them', () => {
   const v = SECRETS.github;
   for (const z of ['\u200b', '\u200d', '\u2060', '\ufeff', '\u00ad', '\u202e']) {
     const out = cleanFree(`use ${[...v].join(z)} now`);
     assert.ok(!out.includes(v.slice(4, 14)), JSON.stringify(z));
     assert.match(out, /\[masked:prefix-token\]/);
   }
-  assert.equal(cleanFree('a\u200bb'), 'ab');
+  assert.equal(cleanFree('a\u200bb'), 'a\u200bb', 'a zero-width space is left as typed: the masker reads through it, and deleting it could join a value the masker did not find');
 });
 
 test('the response mask also catches the new shapes (a value that reaches a response by any path)', () => {
