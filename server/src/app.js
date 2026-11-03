@@ -19,57 +19,62 @@ import { buildCatalog, hasApp, hasTool, parseRoute } from './catalog.js';
 import { callHash, METHODS, normalizeArguments } from './canon.js';
 import { jwks } from './token.js';
 import { shown } from './engine.js';
-import { maskDeep } from './mask.js';
+import { maskDeep, maskProse } from './mask.js';
+import { buildMethodTable, charsetProblem, isPageAddress, methodNotAllowed } from './shared/hygiene.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
 const CONFIG = process.env.CUSTOMER_CONFIG || path.resolve(HERE, '../../customer.config.json');
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-// Every /api route the lab has and the one method it takes. A known route called with another method answers 405 with Allow (not 404), before the body is read.
-export const API_ROUTES = [
-  [/^\/(?:story|diagram|info|jwks|state)\/?$/i, 'GET'],
-  [/^\/(?:canonicalize|evaluate|token|clock|reset)\/?$/i, 'POST'],
-  [/^\/approvals\/[^/]+\/decision\/?$/i, 'POST'],
-  [/^\/policies\/[^/]+\/?$/i, 'PUT'],
-  [/^\/policies\/[^/]+\/reset\/?$/i, 'POST'],
-];
-// The single-page app answers only for a path that can be a page: no file extension, no dot-segment, valid percent-encoding. Anything else that is missing is a 404.
-const isPagePath = (p) => { try { p = decodeURIComponent(p); } catch { return false; } return !/\.[^/]*$/.test(p) && !/\/\./.test(p); };
+// Every /api route the lab has and the methods it takes: ONE table, used for the 405 (with Allow) and nowhere else. ":name" matches one path segment; HEAD is allowed wherever
+// GET is. /api/health is not listed: its router answers its own 405. A path that is not in the table is a 404, never a 405.
+export const API_ROUTES = {
+  '/api/story': ['GET'], '/api/diagram': ['GET'], '/api/info': ['GET'], '/api/jwks': ['GET'], '/api/state': ['GET'],
+  '/api/canonicalize': ['POST'], '/api/evaluate': ['POST'], '/api/token': ['POST'], '/api/clock': ['POST'], '/api/reset': ['POST'],
+  '/api/approvals/:ref/decision': ['POST'],
+  '/api/policies/:layer': ['PUT'],
+  '/api/policies/:layer/reset': ['POST'],
+};
+const METHODS_OF = buildMethodTable(API_ROUTES);
 
 export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // Defence in depth: every JSON answer, from any handler and any status, is masked for credential-shaped values and keys before it leaves. The answers that hold only the
+  // lab's own text (story, diagram, info, the Mock tables; /jwks keeps the strong reading because the shared masker knows a public JWK) set res.locals.labData and are masked
+  // as prose (see mask.js); every other answer, including everything that carries what a visitor typed, is masked with credential-word keys read.
+  app.use((_req, res, next) => { const send = res.json.bind(res); res.json = (b) => send((res.locals.labData ? maskProse : maskDeep)(b)); next(); });
   app.use(hostCheck);
   app.use(sameOriginWrites);
   app.use((_req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); next(); });
+  // A charset other than utf-8 is a 415 with a fixed body: charsetProblem returns a fixed code, so nothing the visitor typed is answered or logged.
+  app.use((req, res, next) => (charsetProblem(req.headers['content-type']) ? res.status(415).json({ error: 'unsupported_charset' }) : next()));
 
   const api = express.Router();
-  // Defence in depth: every JSON answer is masked for credential-shaped values, whatever path produced it.
-  api.use((_req, res, next) => { const send = res.json.bind(res); res.json = (b) => send(maskDeep(b)); next(); });
   api.use((req, res, next) => {
-    const hit = API_ROUTES.find(([re]) => re.test(req.path));
-    if (!hit || req.method === hit[1] || req.method === 'OPTIONS' || (hit[1] === 'GET' && req.method === 'HEAD')) return next();
-    return res.set('Allow', hit[1] === 'GET' ? 'GET, HEAD' : hit[1]).status(405).json({ error: 'method_not_allowed' });
+    const miss = methodNotAllowed(METHODS_OF, req.method, `/api${req.path}`);
+    return miss ? res.set('Allow', miss.allow.join(', ')).status(405).json({ error: 'method_not_allowed' }) : next();
   });
   api.use(express.json({ limit: '32kb' }));
   api.use('/health', health.router);
   const verticalOf = (req) => verticalFrom(req.body?.vertical ?? req.query.vertical);
   const castFor = (req) => loadCast(configFile, verticalOf(req));
   const noStore = (res) => res.set('Cache-Control', 'no-store');
+  const labData = (res) => { res.locals.labData = true; };
   const ws = (req, res) => { const id = workspaceFrom(req); if (!id) res.status(400).json({ error: 'bad_workspace' }); return id; };
   const bodyOf = (req) => (isObj(req.body) ? req.body : {});
 
-  api.get('/story', (req, res) => { noStore(res); res.json(buildStory(castFor(req), verticalOf(req))); });
-  api.get('/diagram', (req, res) => { noStore(res); res.json(buildDiagram(castFor(req), DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0])); });
-  api.get('/info', (_req, res) => { noStore(res); res.json({ mode: defaultMode(), modes: ['mock', 'live'], simulated: true, release: '2026-11-02', unverified: true }); });
+  api.get('/story', (req, res) => { noStore(res); labData(res); res.json(buildStory(castFor(req), verticalOf(req))); });
+  api.get('/diagram', (req, res) => { noStore(res); labData(res); res.json(buildDiagram(castFor(req), DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0])); });
+  api.get('/info', (_req, res) => { noStore(res); labData(res); res.json({ mode: defaultMode(), modes: ['mock', 'live'], simulated: true, release: '2026-11-02', unverified: true }); });
 
   api.get('/state', (req, res) => {
     const id = ws(req, res); if (!id) return;
     noStore(res);
     const mode = modeOf(req.query.mode); if (!mode) return res.status(400).json({ error: 'bad_mode', detail: 'mode must be mock or live' });
     const vertical = verticalOf(req);
-    if (mode === 'mock') return res.json({ mode, vertical, workspace: id, ...mockState(table, vertical, req.query.scenario) });
+    if (mode === 'mock') { labData(res); return res.json({ mode, vertical, workspace: id, ...mockState(table, vertical, req.query.scenario) }); }
     return res.json({ mode, vertical, workspace: id, state: liveState(id, workspaces, vertical, castFor(req)) });
   });
 
@@ -126,19 +131,21 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
   app.use('/api', api);
 
   if (fs.existsSync(path.join(webDist, 'index.html'))) {
-    app.use(express.static(webDist));
-    app.get(/^\/(?!api\/).*/, (req, res, next) => (isPagePath(req.path) ? res.sendFile(path.join(webDist, 'index.html')) : next()));
+    // Real files only: no directory index, no redirect, dotfiles ignored. The page shell is for PAGE ADDRESSES only (isPageAddress) asked for by a client that accepts HTML;
+    // a missing asset, map, icon or dotfile is the JSON 404 below, never a 200 HTML page.
+    app.use(express.static(webDist, { index: false, dotfiles: 'ignore', redirect: false, fallthrough: true }));
+    app.use((req, res, next) => ((req.method === 'GET' || req.method === 'HEAD') && (req.get('accept') ?? '').includes('text/html') && isPageAddress(req.path) ? res.sendFile(path.join(webDist, 'index.html')) : next()));
   }
   // The last two handlers catch everything that is left, for every method and every path: Express's default answers ("Cannot POST /<path>", or an
   // HTML stack trace with file paths) would echo the path the visitor typed, which may be a token. Fixed JSON, no path.
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
   // eslint-disable-next-line no-unused-vars
   app.use((err, _req, res, _next) => {
-    const status = Number(err?.status || err?.statusCode);
     if (err instanceof InputError) return res.status(err.status).json({ error: err.code, detail: err.message });
-    if (status === 413) return res.status(413).json({ error: 'payload_too_large' });
-    if (status >= 400 && status < 500) return res.status(status).json({ error: 'bad_request' });
-    return res.status(500).json({ error: 'internal_error' });
+    if (res.headersSent) return res.end();
+    // a short whitelist of statuses and FIXED codes: err.message, err.stack and anything typed are never sent
+    const status = [400, 413, 415].includes(Number(err?.status || err?.statusCode)) ? Number(err.status || err.statusCode) : 500;
+    return res.status(status).json({ error: { 400: 'bad_request', 413: 'payload_too_large', 415: 'unsupported_charset', 500: 'internal_error' }[status] });
   });
   return app;
 }

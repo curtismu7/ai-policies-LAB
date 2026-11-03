@@ -10,8 +10,8 @@ import { EXPECTED, buildMockTable, runScenario, scenarioList } from './scenarios
 import { defaultPolicy, policyProblems } from './policies.js';
 import { buildCatalog } from './catalog.js';
 import { buildRoster } from './cast.js';
-import { findCredentials } from './credentials.js';
-import { maskDeep } from './mask.js';
+import { looksLikeCredential } from './credentials.js';
+import { maskProse } from './mask.js';
 import { modeFrom } from './config.js';
 import { DIAGRAM_NAMES, buildDiagram } from './diagramData.js';
 import { MOCK_TABLE } from './mockTable.js';
@@ -77,13 +77,13 @@ export async function runChecks({ env = process.env, table = MOCK_TABLE } = {}) 
   const hosts = scanHosts(filled);
   add('story-hosts', hosts.length ? 'fail' : 'pass', hosts.length ? `non-reserved hosts: ${hosts.join(', ')}` : 'every host in the story data is .invalid or .example');
   const keys = scanKeys(filled);
-  const creds = findCredentials(filled.replace(/"hash":"[0-9a-f]{64}"/g, '')); // a call hash is 64 hex characters on purpose
-  add('story-keys', keys.length || creds.length ? 'fail' : 'pass', keys.length || creds.length ? 'credential-shaped text in the story data' : 'no credential-shaped value anywhere in the story data');
+  const creds = looksLikeCredential(filled.replace(/"hash":"[0-9a-f]{64}"/g, '')); // a call hash is 64 hex characters on purpose
+  add('story-keys', keys.length || creds ? 'fail' : 'pass', keys.length || creds ? 'credential-shaped text in the story data' : 'no credential-shaped value anywhere in the story data');
   const story = buildStory(VERTICALS.finance, 'finance');
-  add('masking', JSON.stringify(maskDeep(story)) === JSON.stringify(story) ? 'pass' : 'fail', 'the response mask leaves the story untouched (it only changes credential-shaped values)');
-  add('mock-masking', JSON.stringify(maskDeep(table)) === JSON.stringify(table) ? 'pass' : 'fail', 'the response mask leaves every Mock table untouched: no phrase in a table reads like a credential');
+  add('masking', JSON.stringify(maskProse(story)) === JSON.stringify(story) ? 'pass' : 'fail', 'the response mask leaves the story untouched (it only changes credential-shaped values)');
+  add('mock-masking', JSON.stringify(maskProse(table)) === JSON.stringify(table) ? 'pass' : 'fail', 'the response mask leaves every Mock table untouched: no phrase in a table reads like a credential');
   const dg = DIAGRAM_NAMES.map((n) => buildDiagram(VERTICALS.finance, n));
-  add('diagram-masking', JSON.stringify(maskDeep(dg)) === JSON.stringify(dg) ? 'pass' : 'fail', 'the response mask leaves every diagram untouched: no phrase in a diagram reads like a credential');
+  add('diagram-masking', JSON.stringify(maskProse(dg)) === JSON.stringify(dg) ? 'pass' : 'fail', 'the response mask leaves every diagram untouched: no phrase in a diagram reads like a credential');
   add('diagrams', DIAGRAM_NAMES.every((n) => buildDiagram(VERTICALS.finance, n).steps.length > 0) ? 'pass' : 'fail', `${DIAGRAM_NAMES.length} diagram-studio/1 diagrams load and validate`);
 
   const ng = await netguardSelfTest();

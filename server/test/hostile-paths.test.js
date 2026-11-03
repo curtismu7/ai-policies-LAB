@@ -39,10 +39,11 @@ test('S2: a non-API path answers fixed JSON 404 for every method but GET (GET se
     await withServer(async (url) => {
       const host = new URL(url).host;
       for (const m of ['POST', 'PUT', 'DELETE', 'PATCH']) { const r = await rawHttp(`${url}/anything/at/all`, { method: m, headers: { host, origin: url } }); assert.equal(r.status, 404); assert.deepEqual(JSON.parse(r.text), { error: 'not_found' }, m); }
-      assert.equal((await rawHttp(`${url}/anything`, { headers: { host } })).status, 200);
+      assert.equal((await rawHttp(`${url}/anything`, { headers: { host, accept: 'text/html' } })).status, 200);
+      assert.equal((await rawHttp(`${url}/anything`, { headers: { host } })).status, 404, 'a client that did not ask for HTML gets the JSON 404, not the page');
     }, { webDist: dist });
   } finally { fs.rmSync(dist, { recursive: true, force: true }); }
-  await withServer(async (url) => { const r = await rawHttp(`${url}/anything`, { headers: { host: new URL(url).host } }); assert.equal(r.status, 404); assert.deepEqual(JSON.parse(r.text), { error: 'not_found' }); }, { webDist: '/nonexistent/dist' });
+  await withServer(async (url) => { const r = await rawHttp(`${url}/anything`, { headers: { host: new URL(url).host, accept: 'text/html' } }); assert.equal(r.status, 404); assert.deepEqual(JSON.parse(r.text), { error: 'not_found' }); }, { webDist: '/nonexistent/dist' });
 });
 
 test('S2: a workspace id that looks like a credential is refused, never echoed in the answer or in a hop header', async () => {

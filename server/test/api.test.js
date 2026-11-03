@@ -76,7 +76,7 @@ test('the full cycle over HTTP: mint, hold, a wrong approver, a right one, retry
     assert.match(first.hops[0].request.headers.traceparent, /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
     assert.ok(first.hops.every((h) => /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/.test(h.request.headers.traceparent)));
     assert.ok(first.hops.some((h) => /outbox/.test(h.label)) && first.hops.some((h) => /token check/.test(h.label)));
-    assert.equal(first.hops[0].request.body.token, '[masked:keyed-value]', 'the token is masked in the hop pane (its key is a credential word)');
+    assert.equal(first.hops[0].request.body.token, '[masked:assignment]', 'the token is masked in the hop pane (its key is a credential word)');
     const dec = (approver, authLevel = 2, decision = 'approve') => post(url, '/api/approvals/apr-0001/decision', live({ decision: { approver, decision, authLevel } }));
     const self = await dec(C.castUser); assert.equal(self.status, 403); assert.equal((await self.json()).error, 'self_approval');
     assert.equal((await dec(C.castSecurity, 3)).status, 403);

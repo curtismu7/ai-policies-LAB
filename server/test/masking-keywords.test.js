@@ -2,9 +2,9 @@
 // and the ordinary sentences that must stay readable (the false-positive side of the same trade).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { C, get, post, withServer } from './helpers.js';
+import { C, get, post, put, withServer } from './helpers.js';
 import { sweep } from './sweep.js';
-import { cleanFree, findCredentials, looksLikeCredential, normalizeForMatching } from '../src/credentials.js';
+import { cleanFree, looksLikeCredential, normalizeForMatching } from '../src/credentials.js';
 import { maskDeep } from '../src/mask.js';
 import { PLAIN } from './secrets.js';
 
@@ -21,10 +21,11 @@ const MUST_MASK = [
   // (b) passphrases: every occurrence, in the same text
   ['passphrase is AAA111zz x passphrase is BBB222zz y', 'AAA111zz'],
   ['passphrase is AAA111zz x passphrase is BBB222zz y', 'BBB222zz'],
-  ['passphrase: correct horse battery', 'battery'],
   ['{"a":"passphrase is Tr0ub4dorXq51 and more","b":"passphrase is Tr0ub4dorXq52 and more"}', 'Tr0ub4dorXq51'],
   ['{"a":"passphrase is Tr0ub4dorXq51 and more","b":"passphrase is Tr0ub4dorXq52 and more"}', 'Tr0ub4dorXq52'],
-  ['passphrase = "correct horse battery staple"', 'staple'],
+  // quoted, the whole phrase is masked. The sweep helper strips the quotes when it embeds a text in JSON, and unquoted the shared masker takes only the first word (a known
+  // limit, pinned in masker-limits.test.js), so the probe is that first word
+  ['passphrase = "correct horse battery staple"', 'correct'],
   // (c) a keyword, a plain space and a value
   ['password Tr0ub4dorXq03', 'Tr0ub4dorXq03'],
   ['pw Tr0ub4dorXq04', 'Tr0ub4dorXq04'],
@@ -83,25 +84,22 @@ test('each secret shape is masked and each ordinary sentence is left exactly as 
 
 test('two passphrases in one text are each masked on their own (S1b: the first one no longer swallows the second)', () => {
   const out = cleanFree('passphrase is AAA111zz x passphrase is BBB222zz y');
-  assert.equal((out.match(/\[masked:passphrase\]/g) || []).length, 2, out);
+  assert.equal(out, '[masked:phrase] x [masked:phrase] y');
   assert.ok(!out.includes('AAA111zz') && !out.includes('BBB222zz'));
-  const spans = findCredentials('passphrase is AAA111zz x passphrase is BBB222zz y').filter((s) => s.id === 'passphrase');
-  assert.equal(spans.length, 2);
-  assert.ok(spans[0].end <= spans[1].start, 'the spans do not overlap');
 });
 
 test('the shapeless-keyword rule is bounded: a bare keyword masks only a value that looks like a secret (six characters and a digit, a capital inside, or a symbol)', () => {
-  assert.equal(cleanFree('password Tr0ub4'), '[masked:assignment]', 'six characters with a digit');
+  assert.equal(cleanFree('password Tr0ub4'), '[masked:shape]', 'six characters with a digit');
   assert.equal(cleanFree('password Ab1'), 'password Ab1', 'under six characters');
   assert.equal(cleanFree('password Ab1x2'), 'password Ab1x2', 'five characters are still too short');
-  assert.equal(cleanFree('password Ab1x23'), '[masked:assignment]', 'six characters');
+  assert.equal(cleanFree('password Ab1x23'), '[masked:shape]', 'six characters');
   assert.equal(cleanFree('password hunterxyz'), 'password hunterxyz', 'a lowercase word is prose: the README states this miss');
-  assert.equal(cleanFree('password hunterXyz'), '[masked:assignment]', 'a capital inside the word');
-  assert.equal(cleanFree('password hunter_xyz'), '[masked:assignment]', 'a symbol');
+  assert.equal(cleanFree('password hunterXyz'), '[masked:shape]', 'a capital inside the word');
+  assert.equal(cleanFree('password hunter_xyz'), 'password hunter_xyz', 'an underscore is not a symbol to the shared masker: a new miss (1.4.0), the README states it');
   assert.equal(cleanFree('password 2026-11-02'), 'password 2026-11-02', 'a date is not a secret');
   assert.equal(cleanFree('Session: standup'), 'Session: standup');
   assert.equal(cleanFree('session: Ab1x2'), 'session: Ab1x2', 'a session value of five characters is not enough');
-  assert.equal(cleanFree('session: Ab1x23'), '[masked:assignment]', 'six is');
+  assert.equal(cleanFree('session: Ab1x23'), 'session: Ab1x23', 'a bare session value is judged as prose by the shared masker whatever its length: a new miss (1.4.0), the README states it');
   assert.equal(cleanFree('Session: Q3-review2'), '[masked:assignment]', 'a session value with a digit is treated as a cookie: a known false positive');
 });
 
@@ -134,7 +132,7 @@ test('S1b through the API: a passphrase typed into both arguments of a held chan
     const r = await (await post(url, '/api/evaluate', live({ request: { route: `/mcp/${C.castApp}`, tool: C.castToolHold, arguments: { record: v, newValue: v }, token: good } }))).json();
     assert.equal(r.result.outcome, 'hold');
     assert.ok(!JSON.stringify(r).includes('Tr0ub4dorXq52'), r.result.canonical);
-    assert.equal((r.result.canonical.match(/\[masked:passphrase\]/g) || []).length, 2, r.result.canonical);
+    assert.equal((r.result.canonical.match(/\[masked:phrase\]/g) || []).length, 2, r.result.canonical);
     const st = await (await get(url, '/api/state?mode=live')).text();
     assert.ok(!st.includes('Tr0ub4dorXq52'));
   });
@@ -153,8 +151,14 @@ test('a key NAMED session (or sid) hides its value whatever the value looks like
   });
 });
 
-test('the response mask does not apply the long-run detectors: a long mixed id in an answer is shown as it is, while the same text typed in is masked as key-like', () => {
+test('one masker for what is typed in and what is shown: a 32+ character run with a digit is [masked:opaque] in both, so a rule id of that shape is refused at save', async () => {
   const id = 'payments-report-2026-q4-final-v2';
-  assert.equal(maskDeep({ x: id }).x, id);
-  assert.match(cleanFree(id), /\[masked:key-like\]/);
+  assert.equal(id.length, 32);
+  assert.equal(maskDeep({ x: id }).x, '[masked:opaque]');
+  assert.equal(cleanFree(id), '[masked:opaque]');
+  await withServer(async (url) => {
+    const r = await put(url, '/api/policies/users', live({ rules: [{ id, app: C.castApp, tool: C.castToolRead, users: [C.castUser] }] }));
+    assert.equal(r.status, 422);
+    assert.ok((await r.json()).errors.some((e) => e.code === 'bad_id'));
+  });
 });

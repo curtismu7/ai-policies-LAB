@@ -86,8 +86,9 @@ test('a long simulated reply is inspected whole and only the stored copy is cut;
   assert.equal(d.outcome, 'allow'); assert.ok(d.reply.length <= 400);
   const big = e.evaluate(readCall(e, { simulatedReply: 'word '.repeat(50000) }));
   assert.equal(big.outcome, 'withhold'); assert.equal(big.failedClosed, true); assert.equal(big.resultReleased, false); assert.equal(big.reply, null);
-  const edge = e.evaluate(readCall(e, { simulatedReply: 'a'.repeat(200000) }));
-  assert.equal(edge.outcome, 'withhold', 'a 200000-character run is a credential-shaped blob, so it is withheld by the finding');
+  // the shared masker reads a 32+ character run as opaque only when it holds a digit (a run of letters is a word), so the run carries digits
+  const edge = e.evaluate(readCall(e, { simulatedReply: 'a1b2'.repeat(50000) }));
+  assert.equal(edge.outcome, 'withhold', 'a 200000-character run with digits is a credential-shaped blob, so it is withheld by the finding');
 });
 
 test('POST-INSPECTION CANNOT HOLD: findings on the request refuse, findings on the reply withhold, and neither ever creates an approval', () => {
