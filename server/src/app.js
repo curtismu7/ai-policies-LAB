@@ -13,6 +13,7 @@ import { buildStory } from './story.js';
 import { DIAGRAM_NAMES, buildDiagram } from './diagramData.js';
 import { InputError } from './errors.js';
 import { MOCK_TABLE } from './mockTable.js';
+import { shelfInfo } from './shelfLink.js';
 import { createWorkspaces, workspaceFrom } from './workspaces.js';
 import { liveState, mockState, runAction } from './service.js';
 import { buildCatalog, hasApp, hasTool, parseRoute } from './catalog.js';
@@ -38,7 +39,7 @@ export const API_ROUTES = {
 };
 const METHODS_OF = buildMethodTable(API_ROUTES);
 
-export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST } = {}) {
+export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST, env = process.env } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Defence in depth: every JSON answer, from any handler and any status, is masked for credential-shaped values and keys before it leaves. The answers that hold only the
@@ -58,6 +59,7 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
   });
   api.use(express.json({ limit: '32kb' }));
   api.use('/health', health.router);
+  api.get('/shelf', (_req, res) => { noStore(res); labData(res); res.json(shelfInfo(env)); });
   const verticalOf = (req) => verticalFrom(req.body?.vertical ?? req.query.vertical);
   const castFor = (req) => loadCast(configFile, verticalOf(req));
   const noStore = (res) => res.set('Cache-Control', 'no-store');

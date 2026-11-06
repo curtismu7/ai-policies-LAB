@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ShelfLink from "./components/ShelfLink";
 import EvaluateTab from "./components/EvaluateTab";
 import PoliciesTab from "./components/PoliciesTab";
 import ApprovalsTab from "./components/ApprovalsTab";
@@ -123,6 +124,7 @@ export default function App() {
             {!presenter && story && <p className="head__intro">{story.intro}</p>}
           </div>
           <div className="head__tools">
+            <ShelfLink />
             <div className="seg" role="group" aria-label="Mode">
               <button type="button" aria-pressed={mode === "mock"} onClick={() => setMode("mock")} data-testid="mode-mock">Mock</button>
               <button type="button" aria-pressed={mode === "live"} onClick={() => setMode("live")} data-testid="mode-live">Live</button>

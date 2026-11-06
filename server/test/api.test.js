@@ -194,3 +194,13 @@ test('WORKSPACE CAP: a flood of new ids is refused (503, fixed JSON) and never e
     assert.equal((await post(url, '/api/clock', live({ clock: { minutes: 1 } }), W('brand-new'))).status, 200, 'a Reset freed a slot');
   }, { workspaces: createWorkspaces({ max: 4 }) });
 });
+
+test('GET /api/shelf answers the shelf URL (null when unconfigured)', async () => {
+  await withServer(async (url) => {
+    const res = await fetch(`${url}/api/shelf`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(Object.keys(body), ['shelfUrl']);
+    assert.equal(body.shelfUrl, null);
+  }, { env: {} });
+});
