@@ -11,7 +11,7 @@ import LastAction from "./components/LastAction";
 import useLab from "./hooks/useLab";
 import useEvaluator from "./hooks/useEvaluator";
 import { buildPresets } from "./presets";
-import { getJson, resetWorkspace } from "./api";
+import { getJson, postJson, resetWorkspace } from "./api";
 
 export const TABS = [
   { id: "evaluate", label: "Evaluate" },
@@ -26,7 +26,6 @@ export const TABS = [
 const TAIL = "Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). Nothing here calls a real gateway, identity provider, chat tool or tenant.";
 export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (loopback only, no outbound network). ${TAIL}`;
 const PRESENTER_TALK = { evaluate: ["say-first", "two-controls", "four-layers"], policies: ["four-layers"], approvals: ["hold", "bound", "period"], where: ["where", "hard"], closed: ["closed"], diagram: ["why-ai-policies"] };
-const MODE_KEY = "aip.mode";
 
 const THEME_KEY = "aip.theme";
 const THEMES = [["auto", "Auto"], ["light", "Light"], ["dark", "Dark"]];
@@ -36,7 +35,6 @@ function initialTheme() {
 }
 
 const tabFromHash = () => { const h = window.location.hash.replace("#", ""); return TABS.some((t) => t.id === h) ? h : "evaluate"; };
-const savedMode = () => { try { const m = window.localStorage.getItem(MODE_KEY); return m === "live" || m === "mock" ? m : null; } catch { return null; } };
 
 export default function App() {
   const [vertical, setVertical] = useState("finance");
@@ -61,7 +59,7 @@ export default function App() {
   const ev = useEvaluator(lab);
   const presets = useMemo(() => (story ? buildPresets(story.cast) : []), [story]);
 
-  useEffect(() => { getJson("/api/info").then((i) => setModeState((m) => m || savedMode() || i.mode), () => setModeState((m) => m || savedMode() || "mock")); }, []);
+  useEffect(() => { getJson("/api/info").then((i) => setModeState((m) => m || i.mode || i.source), () => setModeState((m) => m || "mock")); }, []);
   useEffect(() => {
     let live = true; // a late story for a vertical the visitor has already left is dropped
     getJson(`/api/story?vertical=${encodeURIComponent(vertical)}`).then((j) => { if (live) { setStory(j); setError(null); } }, (e) => { if (live) setError(e.message); });
@@ -73,7 +71,16 @@ export default function App() {
     return () => window.removeEventListener("hashchange", on);
   }, []);
   useEffect(() => { ev.setForm(null); ev.setDecision(null); }, [mode, vertical]); // eslint-disable-line react-hooks/exhaustive-deps
-  const setMode = (m) => { setModeState(m); try { window.localStorage.setItem(MODE_KEY, m); } catch { /* storage blocked */ } };
+  // Rule 19: switching is a server call (POST /api/mode with exactly {source}), then the data reloads so the banner,
+  // mode chip and every tab reflect the mode the server answered with.
+  const [modeError, setModeError] = useState(null);
+  const setMode = async (m) => {
+    setModeError(null);
+    const r = await postJson("/api/mode", { source: m === "live" ? "real" : "mock" });
+    if (!r.ok) { setModeError(r.body?.detail || r.body?.error || `HTTP ${r.status}`); return; }
+    setModeState(r.body?.mode || m);
+    await lab.reload();
+  };
   const select = (id) => { setTab(id); try { window.history.replaceState(null, "", `#${id}`); } catch { /* ignore */ } };
 
   // Keep the active tab fully in view in the scrolling tab strip (375px).
@@ -118,6 +125,7 @@ export default function App() {
     <div className={`app${presenter ? " app--presenter" : ""}`}>
       <header>
         <p className="banner" role="status" data-state={mode === "live" ? "live" : "mock"} data-testid="banner">{banner}</p>
+        {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
         <div className="head">
           <div>
             <h1 className="head__title">AI Policies LAB</h1>

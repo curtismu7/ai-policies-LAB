@@ -31,7 +31,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 // Every /api route the lab has and the methods it takes: ONE table, used for the 405 (with Allow) and nowhere else. ":name" matches one path segment; HEAD is allowed wherever
 // GET is. /api/health is not listed: its router answers its own 405. A path that is not in the table is a 404, never a 405.
 export const API_ROUTES = {
-  '/api/story': ['GET'], '/api/diagram': ['GET'], '/api/info': ['GET'], '/api/jwks': ['GET'], '/api/state': ['GET'],
+  '/api/story': ['GET'], '/api/diagram': ['GET'], '/api/info': ['GET'], '/api/jwks': ['GET'], '/api/state': ['GET'], '/api/mode': ['POST'],
   '/api/canonicalize': ['POST'], '/api/evaluate': ['POST'], '/api/token': ['POST'], '/api/clock': ['POST'], '/api/reset': ['POST'],
   '/api/approvals/:ref/decision': ['POST'],
   '/api/policies/:layer': ['PUT'],
@@ -69,7 +69,22 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
 
   api.get('/story', (req, res) => { noStore(res); labData(res); res.json(buildStory(castFor(req), verticalOf(req))); });
   api.get('/diagram', (req, res) => { noStore(res); labData(res); res.json(buildDiagram(castFor(req), DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0])); });
-  api.get('/info', (_req, res) => { noStore(res); labData(res); res.json({ mode: defaultMode(), modes: ['mock', 'live'], simulated: true, release: '2026-11-02', unverified: true }); });
+  // Rule 19: the server holds the Mock/Real mode. Both are available: mock reads generated tables, live drives the loopback engine.
+  // The wire value of source is mock|real; this lab's internal mode is mock|live, and real means live here.
+  let current = defaultMode();
+  const toSource = (m) => (m === 'live' ? 'real' : m);
+  const toMode = (s) => (s === 'real' ? 'live' : s);
+  api.get('/info', (_req, res) => { noStore(res); labData(res); res.json({ mode: current, source: toSource(current), realAvailable: true, realReason: null, modes: ['mock', 'live'], simulated: true, release: '2026-11-02', unverified: true }); });
+  // Rule 19: switching is server-side. The body is exactly { source: "mock" | "real" }.
+  api.post('/mode', (req, res) => {
+    noStore(res); labData(res);
+    const b = isObj(req.body) ? req.body : {};
+    const next = b.source;
+    if (next !== 'mock' && next !== 'real') return res.status(400).json({ error: 'bad_mode', detail: 'source must be exactly "mock" or "real"' });
+    if (!Object.keys(b).every((k) => k === 'source')) return res.status(400).json({ error: 'unknown_field', detail: 'the body takes only source' });
+    current = toMode(next);
+    return res.json({ mode: current, source: toSource(current), realAvailable: true, realReason: null });
+  });
 
   api.get('/state', (req, res) => {
     const id = ws(req, res); if (!id) return;

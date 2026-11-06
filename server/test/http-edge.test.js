@@ -40,8 +40,8 @@ test('415: a charset other than utf-8 is answered with a fixed body on any metho
 
 test('405: the route table is the one place the methods live: every route, every other method, Allow from the table, HEAD wherever GET is', async () => {
   const entries = Object.entries(API_ROUTES);
-  assert.equal(entries.length, 13);
-  assert.deepEqual(Object.values(API_ROUTES).map((m) => m.join('')).sort(), ['GET', 'GET', 'GET', 'GET', 'GET', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'PUT']);
+  assert.equal(entries.length, 14);
+  assert.deepEqual(Object.values(API_ROUTES).map((m) => m.join('')).sort(), ['GET', 'GET', 'GET', 'GET', 'GET', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'PUT']);
   await withServer(async (url) => {
     const host = new URL(url).host;
     for (const [key, methods] of entries) {

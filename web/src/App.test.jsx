@@ -35,7 +35,8 @@ beforeAll(async () => {
   };
 });
 afterAll(async () => { globalThis.fetch = realFetch; await new Promise((r) => server.close(r)); });
-beforeEach(() => { cleanup(); forgetWorkspace(); seen = []; delay = () => 0; override = () => null; pending = 0; try { window.localStorage.clear(); window.sessionStorage.clear(); } catch { /* ignore */ } window.location.hash = ""; });
+beforeEach(async () => { cleanup(); forgetWorkspace(); seen = []; delay = () => 0; override = () => null; pending = 0; try { window.localStorage.clear(); window.sessionStorage.clear(); } catch { /* ignore */ } window.location.hash = ""; // rule 19: the server holds the mode, so every test starts from mock
+  await realFetch(`${base}/api/mode`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ source: "mock" }) }); });
 
 const T = { timeout: 20000 };
 const mount = async () => { render(<App />); await screen.findByTestId("scenario-four-layers", {}, T); };
@@ -187,6 +188,34 @@ describe("stale answers", () => {
     await settle(); await new Promise((r) => setTimeout(r, 450));
     expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/); expect(screen.getByTestId("mode")).toHaveTextContent("Mode: mock");
     expect(screen.getAllByTestId(/^scenario-(?!say)/).length).toBe(6);
+  });
+});
+
+describe("rule 19: server-backed mode", () => {
+  it("each switch POSTs /api/mode with exactly {source} and the page reloads its data", async () => {
+    await mount();
+    seen.length = 0;
+    await click("mode-live");
+    await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/), T);
+    expect(seen.some((r) => r.url.endsWith("/api/mode") && r.body === JSON.stringify({ source: "real" }))).toBe(true);
+    expect(seen.some((r) => r.url.includes("/api/state?"))).toBe(true);
+    expect(screen.getByTestId("mode")).toHaveTextContent("Mode: live");
+    seen.length = 0;
+    await click("mode-mock");
+    await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
+    expect(seen.some((r) => r.url.endsWith("/api/mode") && r.body === JSON.stringify({ source: "mock" }))).toBe(true);
+    expect(screen.getByTestId("mode")).toHaveTextContent("Mode: mock");
+  });
+  it("the mode the server holds survives a reload, and a bad body is refused 400", async () => {
+    await mount();
+    await click("mode-live");
+    await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/), T);
+    cleanup(); render(<App />);
+    await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/), T);
+    const r = await fetch(`${base}/api/mode`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ source: "live" }) });
+    expect(r.status).toBe(400);
+    const j = await r.json();
+    expect(j.error).toBe("bad_mode");
   });
 });
 
