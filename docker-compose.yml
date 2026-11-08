@@ -10,6 +10,7 @@ services:
     ports:
       - "127.0.0.1:${HOST_PORT:-7500}:7500"
     environment:
+      SHELF_URL: ${SHELF_URL:-http://127.0.0.1:4400}
       PORT: "7500"
       AIPLAB_BIND: 0.0.0.0
       AIP_LAB_MODE: ${AIP_LAB_MODE:-mock}
