@@ -52,3 +52,7 @@ test('the container is locked down: read-only fs, no capabilities, no new privil
   assert.match(compose, /cap_drop: \[ALL\]/);
   assert.match(compose, /no-new-privileges:true/);
 });
+
+test('compose passes a usable SHELF_URL so the header Shelf button shows in Docker', () => {
+  assert.match(here('docker-compose.yml'), /SHELF_URL:\s*\$\{SHELF_URL:-http:\/\/127\.0\.0\.1:4400\}/);
+});
