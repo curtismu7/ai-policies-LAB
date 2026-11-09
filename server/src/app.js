@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { hostCheck, sameOriginWrites } from './safety.js';
+import { makeHostCheck, makeSameOriginWrites, parseAllowedHosts, resolvePort } from './safety.js';
 import { createHealth } from './health.js';
 import { loadCast, verticalFrom } from './cast.js';
 import { defaultMode, modeOf } from './config.js';
@@ -39,15 +39,15 @@ export const API_ROUTES = {
 };
 const METHODS_OF = buildMethodTable(API_ROUTES);
 
-export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST, env = process.env } = {}) {
+export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST, env = process.env, allowedHosts = parseAllowedHosts(env), port = resolvePort(env) } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Defence in depth: every JSON answer, from any handler and any status, is masked for credential-shaped values and keys before it leaves. The answers that hold only the
   // lab's own text (story, diagram, info, the Mock tables; /jwks keeps the strong reading because the shared masker knows a public JWK) set res.locals.labData and are masked
   // as prose (see mask.js); every other answer, including everything that carries what a visitor typed, is masked with credential-word keys read.
   app.use((_req, res, next) => { const send = res.json.bind(res); res.json = (b) => send((res.locals.labData ? maskProse : maskDeep)(b)); next(); });
-  app.use(hostCheck);
-  app.use(sameOriginWrites);
+  app.use(makeHostCheck({ allowed: allowedHosts, port }));
+  app.use(makeSameOriginWrites({ allowed: allowedHosts, port }));
   app.use((_req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); next(); });
   // A charset other than utf-8 is a 415 with a fixed body: charsetProblem returns a fixed code, so nothing the visitor typed is answered or logged.
   app.use((req, res, next) => (charsetProblem(req.headers['content-type']) ? res.status(415).json({ error: 'unsupported_charset' }) : next()));
