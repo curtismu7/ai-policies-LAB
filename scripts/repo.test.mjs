@@ -74,7 +74,8 @@ test('README follows the README standard: title ends in LAB, plain Tier and Repo
   for (const h of ['Run from a clone', 'Settings file', 'Ports, and what to do if the port is taken', 'Mock and live modes', 'Health, doctor and reset', 'Docker', 'Tests', 'Troubleshooting', 'Ownership', 'What is simulated']) assert.match(r, new RegExp(`^## .*${h}`, 'mi'), h);
   assert.match(r, /lsof -iTCP:7500 -sTCP:LISTEN -n -P/);
   assert.match(r, /PORT=<other port> npm start/);
-  assert.ok(!/ping-devops|cmuir|curtismu/i.test(r));
+  // The Repo: line and the clone command name the real repo (family drift check); no other line may name an internal host or person.
+  assert.ok(!/ping-devops|cmuir|curtismu/i.test(r.split('\n').filter((l) => !/https:\/\/github\.com\/curtismu7\/ai-policies-LAB(\.git)?$/.test(l)).join('\n')));
   assert.ok(!/\bdoor\b/i.test(r));
 });
 
