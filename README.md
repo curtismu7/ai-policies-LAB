@@ -3,7 +3,7 @@
 A simulation of Ping's "AI Policies: Scope and HITL" release claims: four layered scope checks read from a verified token, and a third outcome beside allow and block that holds a call for a person, with approvals that are single-use, bound to the exact call and never a bypass.
 
 Tier: Demo
-Repo: https://github.com/ping-sandbox/ai-policies-LAB
+Repo: https://github.com/curtismu7/ai-policies-LAB
 Catalog: D109
 
 **Tier: Demo.** Source: the Ping ID4AI Workforce H2 2026 deck, slide 52 (with 35, 36 and 48), release 2026-11-02. **Every product claim is a Ping release claim, UNVERIFIED on our tenant.** Nothing here calls a real gateway, identity provider, chat tool, ticket system or tenant, and nothing leaves your machine.
