@@ -62,7 +62,7 @@ The deck gives claims; our own notes give measured behaviour on our tenant; the 
 Prerequisites: Node 26 or newer. Docker only if you use the Docker form. Mock mode works with no setup at all: no tenant, no credentials, no settings file.
 
 ```
-git clone https://github.com/ping-sandbox/ai-policies-LAB.git
+git clone https://github.com/curtismu7/ai-policies-LAB.git
 cd ai-policies-LAB
 npm ci
 npm run build
