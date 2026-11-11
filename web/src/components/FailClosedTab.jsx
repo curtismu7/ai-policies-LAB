@@ -25,7 +25,7 @@ export default function FailClosedTab({ story, mode, lab, ev, presets }) {
         <h2 className="panel__title">Fail closed <ClaimTag /></h2>
         <ul className="plain" data-testid="fail-rules">{RULES.map(([t, src, n]) => <li key={t}><strong>{t}.</strong> <SourceTag source={src} /> {n}</li>)}</ul>
         <div className="seg">
-          {[["wrong-type", "An argument of the wrong type"], ["fault", "An evaluation error"], ["tamper", "A tampered token"], ["dup", "Duplicate keys"], ["proto", "A __proto__ key"]].map(([id, l]) => <button key={id} type="button" disabled={!live || lab.busy} onClick={() => go(id)} data-testid={`fc-${id}`}>Run: {l}</button>)}
+          {[["wrong-type", "An argument of the wrong type"], ["fault", "An evaluation error"], ["tamper", "A tampered token"], ["dup", "Duplicate keys"], ["proto", "A __proto__ key"]].map(([id, l], i) => <button key={id} type="button" className={i === 0 ? "primary" : undefined} disabled={!live || lab.busy} onClick={() => go(id)} data-testid={`fc-${id}`}>Run: {l}</button>)}
         </div>
         {!live ? <p className="muted">Switch to Live to run these. In Mock, the "Fail closed" scenario on the Evaluate tab shows the results.</p> : d ? <p data-testid="fc-result">Last result: <strong>{d.outcome}</strong> <code>{d.code}</code> (HTTP {ev.decision.http}){d.failedClosed ? ", failed closed" : ""}. {visible(d.reason)} See the Evaluate tab for the layer-by-layer trace.</p> : null}
       </section>

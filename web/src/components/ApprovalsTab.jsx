@@ -28,7 +28,7 @@ export default function ApprovalsTab({ story, mode, lab, ev }) {
         </div>
         <p className="muted" data-testid="clock">Lab clock: <strong>{s.clock.now}</strong> (UTC, {s.clock.minutesSinceStart} minutes since the start; it only moves forward). <SourceTag source="invented" /></p>
         <div className="seg" aria-label="Move the lab clock">
-          {[[15, "+15 minutes"], [60, "+1 hour"], [1440, "+1 day"]].map(([m, l]) => <button key={m} type="button" disabled={off} onClick={() => advance(m)} data-testid={`clock-${m}`}>{l}</button>)}
+          {[[15, "+15 minutes"], [60, "+1 hour"], [1440, "+1 day"]].map(([m, l], i) => <button key={m} type="button" className={i === 1 ? "primary" : undefined} disabled={off} onClick={() => advance(m)} data-testid={`clock-${m}`}>{l}</button>)}
         </div>
         {msg ? <p className={msg.ok ? "muted" : "field-error"} role={msg.ok ? "status" : "alert"} data-testid="decision-message">{msg.ok ? "" : <code>{msg.code}: </code>}{visible(msg.text)}</p> : <p className="sr-only" data-testid="decision-message" />}
       </section>

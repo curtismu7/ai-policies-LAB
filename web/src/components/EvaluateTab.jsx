@@ -76,7 +76,7 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
               <label>Lifetime (minutes, lab clock) <SourceTag source="invented" /><input type="number" min="1" max="1440" value={f.ttl} onChange={(e) => set("ttl", e.target.value)} data-testid="ttl" /></label>
             </div>
             <div className="seg">
-              <button type="button" className="primary" disabled={busy} onClick={() => ev.mint(f).then((t) => t && set("token", t))} data-testid="mint">Mint token</button>
+              <button type="button" disabled={busy} onClick={() => ev.mint(f).then((t) => t && set("token", t))} data-testid="mint">Mint token</button>
               <button type="button" disabled={!f.token} onClick={() => set("token", tamper(f.token))} data-testid="tamper">Tamper with the token</button>
             </div>
             <label>Token (labelled mock-issued) <SourceTag source="reading" />
