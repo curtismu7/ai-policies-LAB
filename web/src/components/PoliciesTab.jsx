@@ -43,7 +43,7 @@ function Layer({ layer, rules, readOnly, busy, lab, errors, setErrors }) {
         </div>
       ) : null}
       <div className="seg">
-        <button type="button" className="primary" disabled={off} onClick={save} data-testid={`save-${layer.id}`}>Save layer</button>
+        <button type="button" disabled={off} onClick={save} data-testid={`save-${layer.id}`}>Save layer</button>
         <button type="button" disabled={off} onClick={() => setDraft(text)} data-testid={`revert-${layer.id}`}>Revert edits</button>
         <button type="button" disabled={off} onClick={reset} data-testid={`reset-${layer.id}`}>Reset layer to default</button>
         {layer.id === "users" ? <button type="button" disabled={off} onClick={() => { try { const r = JSON.parse(draft); r.push({ id: "usr-ghost", app: r[0]?.app, tool: r[0]?.tool, users: ["ghost.user"] }); setDraft(JSON.stringify(r, null, 2)); } catch { /* not JSON */ } }} data-testid="add-ghost">Add a rule naming someone who does not exist</button> : null}
