@@ -123,46 +123,45 @@ export default function App() {
   const props = { story, mode, vertical, lab };
   return (
     <div className={`app${presenter ? " app--presenter" : ""}`}>
-      <header>
-        <p className="banner" role="status" data-state={mode === "live" ? "live" : "mock"} data-testid="banner">{banner}</p>
-        {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
-        <div className="head">
-          <div>
-            <h1 className="head__title">AI Policies LAB</h1>
-            {!presenter && story && <p className="head__intro">{story.intro}</p>}
+      <header className="shell-bar">
+        <span className="shell-brand">
+          <span className="shell-logo" aria-hidden="true">P</span>
+          <h1>AI Policies LAB</h1>
+        </span>
+        <span className="shell-right">
+          {!presenter && story && <span className="shell-intro">{story.intro}</span>}
+          <ShelfLink />
+          <div className="seg" role="group" aria-label="Mode">
+            <button type="button" aria-pressed={mode === "mock"} onClick={() => setMode("mock")} data-testid="mode-mock">Mock</button>
+            <button type="button" aria-pressed={mode === "live"} onClick={() => setMode("live")} data-testid="mode-live">Live</button>
           </div>
-          <div className="head__tools">
-            <ShelfLink />
-            <div className="seg" role="group" aria-label="Mode">
-              <button type="button" aria-pressed={mode === "mock"} onClick={() => setMode("mock")} data-testid="mode-mock">Mock</button>
-              <button type="button" aria-pressed={mode === "live"} onClick={() => setMode("live")} data-testid="mode-live">Live</button>
-            </div>
-            <label className="shell-theme">Theme
-              <select value={theme} onChange={(e) => pickTheme(e.target.value)}>
-                {THEMES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          <label className="shell-theme">Theme
+            <select value={theme} onChange={(e) => pickTheme(e.target.value)}>
+              {THEMES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+          </label>
+          <span className="chip" data-testid="mode">Mode: {mode || "..."}{mode === "live" ? " (local engine, loopback)" : mode === "mock" ? " (tables)" : ""}</span>
+          {!presenter && (
+            <label className="inline">Vertical{" "}
+              <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">
+                {(story ? story.verticals : ["finance"]).map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </label>
-            <span className="chip" data-testid="mode">Mode: {mode || "..."}{mode === "live" ? " (local engine, loopback)" : mode === "mock" ? " (tables)" : ""}</span>
-            {!presenter && (
-              <label className="inline">Vertical{" "}
-                <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">
-                  {(story ? story.verticals : ["finance"]).map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </label>
-            )}
-            <button type="button" onClick={reset} data-testid="reset">Reset</button>
-            <button type="button" aria-pressed={presenter} onClick={() => setPresenter((v) => !v)} data-testid="presenter">{presenter ? "Exit presenter (Esc)" : "Presenter (P)"}</button>
-          </div>
-        </div>
-      </header>
-      <main>
-        <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
-        <div role="tablist" aria-label="Lab sections" className="tabs" ref={tabsRef}>
+          )}
+          <button type="button" onClick={reset} data-testid="reset">Reset</button>
+          <button type="button" aria-pressed={presenter} onClick={() => setPresenter((v) => !v)} data-testid="presenter">{presenter ? "Exit presenter (Esc)" : "Presenter (P)"}</button>
+        </span>
+        <div role="tablist" aria-label="Lab sections" className="tabs shell-nav" ref={tabsRef}>
           {TABS.map((t, i) => (
             <button key={t.id} id={`tab-${t.id}`} role="tab" type="button" aria-selected={tab === t.id} aria-controls={`panel-${t.id}`} tabIndex={tab === t.id ? 0 : -1}
               onClick={() => select(t.id)} onKeyDown={(e) => onKeyTab(e, i)}>{t.label}</button>
           ))}
         </div>
+        {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
+      </header>
+      <main>
+        <p className="banner" role="status" data-state={mode === "live" ? "live" : "mock"} data-testid="banner">{banner}</p>
+        <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
         <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {error || lab.error ? <p className="app-error" role="alert">Could not load the lab ({error || lab.error}). Is the server running?</p> : !ready ? <p className="muted">Loading...</p> : (
             <>

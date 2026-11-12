@@ -63,6 +63,10 @@ export default function PoliciesTab({ story, mode, lab }) {
       <section className="panel">
         <h2 className="panel__title">Policies <ClaimTag /></h2>
         <p className="muted">{readOnly ? "Mock is read-only: this is the default policy the scripted scenarios use. Switch to Live to edit it." : "Each layer is a list of rules. Saving validates every rule and saves nothing if one is wrong (atomic)."} Rule formats are lab-invented; the layers and what each decides are the deck's claims (slide 52).</p>
+        <div className="seg">
+          <button type="button" className="primary" disabled={lab.busy} onClick={() => lab.reload()} data-testid="reload-policies">Reload the policy</button>
+          <span className="muted">Saving validates every rule and saves nothing if one is wrong (atomic).</span>
+        </div>
         <table className="tbl" data-testid="pair-table"><caption>The two questions, and what the pair means</caption>
           <thead><tr><th>Attended?</th><th>Unattended?</th><th>Result</th></tr></thead>
           <tbody>{PAIR.map(([a, u, r]) => <tr key={`${a}${u}`}><td>{a}</td><td>{u}</td><td>{r}</td></tr>)}</tbody>

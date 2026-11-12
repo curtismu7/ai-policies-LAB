@@ -22,7 +22,7 @@ export default function WhereTab({ mode, lab, ev, presets }) {
         </table></div>
         <p className="muted">There is no outcome "hold" below the first row. The lab enforces it twice: a rule that tries is refused when saved, and the engine never produces a hold from an inspection stage. <SourceTag source="reading" /></p>
         <div className="seg">
-          <button type="button" disabled={!live || lab.busy} onClick={() => go("req-finding")} data-testid="try-request-finding">Run: a finding on the request</button>
+          <button type="button" className="primary" disabled={!live || lab.busy} onClick={() => go("req-finding")} data-testid="try-request-finding">Run: a finding on the request</button>
           <button type="button" disabled={!live || lab.busy} onClick={() => go("rep-finding")} data-testid="try-reply-finding">Run: a finding on the reply</button>
           <button type="button" disabled={!live || lab.busy} onClick={tryHold} data-testid="try-inspection-hold">Try to save an inspection rule that holds</button>
         </div>
