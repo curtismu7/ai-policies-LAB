@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import TopMenu, { applyFontSize } from "./top-menu/TopMenu";
 import ShelfLink from "./components/ShelfLink";
 import EvaluateTab from "./components/EvaluateTab";
 import PoliciesTab from "./components/PoliciesTab";
@@ -28,10 +29,14 @@ export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (loopback only, no o
 const PRESENTER_TALK = { evaluate: ["say-first", "two-controls", "four-layers"], policies: ["four-layers"], approvals: ["hold", "bound", "period"], where: ["where", "hard"], closed: ["closed"], diagram: ["why-ai-policies"] };
 
 const THEME_KEY = "aip.theme";
-const THEMES = [["auto", "Auto"], ["light", "Light"], ["dark", "Dark"]];
+const FONT_KEY = "aip.font";
 function initialTheme() {
   try { const t = localStorage.getItem(THEME_KEY); if (t === "light" || t === "dark") return t; } catch { /* storage blocked */ }
   return "auto";
+}
+function initialFont() {
+  try { const f = localStorage.getItem(FONT_KEY); if (f === "S" || f === "M" || f === "L") return f; } catch { /* storage blocked */ }
+  return "M";
 }
 
 const tabFromHash = () => { const h = window.location.hash.replace("#", ""); return TABS.some((t) => t.id === h) ? h : "evaluate"; };
@@ -48,12 +53,14 @@ export default function App() {
   const [resetSignal, setResetSignal] = useState(0);
   const [resetMsg, setResetMsg] = useState("");
   const [theme, setTheme] = useState(initialTheme);
+  const [fontStep, setFontStep] = useState(initialFont);
   const pickTheme = (next) => {
     try { if (next === "auto") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, next); } catch { /* not remembered */ }
     setTheme(next);
   };
   // The picker only sets data-theme; the shared stylesheet does the rest ("auto" follows the system setting).
   useEffect(() => { if (theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme; }, [theme]);
+  useEffect(() => { applyFontSize(fontStep); try { localStorage.setItem(FONT_KEY, fontStep); } catch { /* not remembered */ } }, [fontStep]);
   const tabsRef = useRef(null);
   const lab = useLab({ mode, vertical, scenario: scenarioId });
   const ev = useEvaluator(lab);
@@ -123,45 +130,39 @@ export default function App() {
   const props = { story, mode, vertical, lab };
   return (
     <div className={`app${presenter ? " app--presenter" : ""}`}>
-      <header className="shell-bar">
-        <span className="shell-brand">
-          <span className="shell-logo" aria-hidden="true">P</span>
-          <h1>AI Policies LAB</h1>
-        </span>
-        <span className="shell-right">
-          {!presenter && story && <span className="shell-intro">{story.intro}</span>}
-          <ShelfLink />
-          <div className="seg" role="group" aria-label="Mode">
-            <button type="button" aria-pressed={mode === "mock"} onClick={() => setMode("mock")} data-testid="mode-mock">Mock</button>
-            <button type="button" aria-pressed={mode === "live"} onClick={() => setMode("live")} data-testid="mode-live">Live</button>
+      <header>
+        <p className="banner" role="status" data-state={mode === "live" ? "live" : "mock"} data-testid="banner">{banner}</p>
+        {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
+        <div className="head">
+          <div>
+            <h1 className="head__title">AI Policies LAB</h1>
+            {!presenter && story && <p className="head__intro">{story.intro}</p>}
           </div>
-          <label className="shell-theme">Theme
-            <select value={theme} onChange={(e) => pickTheme(e.target.value)}>
-              {THEMES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-            </select>
-          </label>
-          <span className="chip" data-testid="mode">Mode: {mode || "..."}{mode === "live" ? " (local engine, loopback)" : mode === "mock" ? " (tables)" : ""}</span>
-          {!presenter && (
-            <label className="inline">Vertical{" "}
-              <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">
-                {(story ? story.verticals : ["finance"]).map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </label>
-          )}
-          <button type="button" onClick={reset} data-testid="reset">Reset</button>
-          <button type="button" aria-pressed={presenter} onClick={() => setPresenter((v) => !v)} data-testid="presenter">{presenter ? "Exit presenter (Esc)" : "Presenter (P)"}</button>
-        </span>
-        <div role="tablist" aria-label="Lab sections" className="tabs shell-nav" ref={tabsRef}>
+          <div className="head__tools">
+            <TopMenu
+              mode={{ value: mode === "live" ? "real" : "mock", onChange: (v) => setMode(v === "real" ? "live" : "mock"), realAvailable: true }}
+              vertical={{ value: vertical, onChange: setVertical, options: story ? story.verticals : ["finance"] }}
+              theme={{ value: theme, onChange: pickTheme }}
+              fontSize={{ value: fontStep, onChange: setFontStep }}
+              present={{ active: presenter, onToggle: () => setPresenter((v) => !v) }}
+              talkTrack={{ active: tab === "talk", onToggle: () => select("talk") }}
+              help={{ href: "https://github.com/curtismu7/ai-policies-LAB#readme" }}
+              onReset={reset}
+            >
+              <ShelfLink />
+            </TopMenu>
+            <span className="chip" data-testid="mode">Mode: {mode || "..."}{mode === "live" ? " (local engine, loopback)" : mode === "mock" ? " (tables)" : ""}</span>
+          </div>
+        </div>
+      </header>
+      <main>
+        <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
+        <div role="tablist" aria-label="Lab sections" className="tabs" ref={tabsRef}>
           {TABS.map((t, i) => (
             <button key={t.id} id={`tab-${t.id}`} role="tab" type="button" aria-selected={tab === t.id} aria-controls={`panel-${t.id}`} tabIndex={tab === t.id ? 0 : -1}
               onClick={() => select(t.id)} onKeyDown={(e) => onKeyTab(e, i)}>{t.label}</button>
           ))}
         </div>
-        {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
-      </header>
-      <main>
-        <p className="banner" role="status" data-state={mode === "live" ? "live" : "mock"} data-testid="banner">{banner}</p>
-        <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
         <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {error || lab.error ? <p className="app-error" role="alert">Could not load the lab ({error || lab.error}). Is the server running?</p> : !ready ? <p className="muted">Loading...</p> : (
             <>

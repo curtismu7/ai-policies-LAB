@@ -41,8 +41,8 @@ beforeEach(async () => { cleanup(); forgetWorkspace(); seen = []; delay = () => 
 const T = { timeout: 20000 };
 const mount = async () => { render(<App />); await screen.findByTestId("scenario-four-layers", {}, T); };
 const tab = (name) => userEvent.click(screen.getByRole("tab", { name }));
-const click = (id) => userEvent.click(screen.getByTestId(id));
-const live = async () => { await click("mode-live"); await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/)); await screen.findByTestId("run-hold", {}, T); };
+const click = (id, value) => (value === undefined ? userEvent.click(screen.getByTestId(id)) : userEvent.selectOptions(screen.getByTestId(id), value));
+const live = async () => { await click("mode-select", "real"); await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/)); await screen.findByTestId("run-hold", {}, T); };
 const pick = (id, value) => userEvent.selectOptions(screen.getByTestId(id), value);
 // Click a quick start and wait for ITS answer: the evaluate request must have been sent and answered (a decision from an earlier click may still be on the page, and the
 // button only turns disabled after React has rendered, so neither is proof that this run has finished).
@@ -85,7 +85,7 @@ describe("shell", () => {
     await mount(); await live();
     expect(screen.getByTestId("mode")).toHaveTextContent("Mode: live");
     await tab("Policies"); expect((await screen.findByTestId("save-users", {}, T))).toBeEnabled();
-    await click("mode-mock"); await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
+    await click("mode-select", "mock"); await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
     await waitFor(() => expect(screen.getByTestId("save-users")).toBeDisabled(), T);
     expect(screen.getByTestId("edit-users")).toHaveAttribute("readonly");
   });
@@ -183,7 +183,7 @@ describe("Live flows", () => {
 describe("stale answers", () => {
   it("an answer for a mode the visitor has already left is dropped", async () => {
     delay = (u) => (u.includes("mode=live") && u.includes("/api/state") ? 400 : 0);
-    await mount(); await click("mode-live"); await click("mode-mock");
+    await mount(); await click("mode-select", "real"); await click("mode-select", "mock");
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
     await settle(); await new Promise((r) => setTimeout(r, 450));
     expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/); expect(screen.getByTestId("mode")).toHaveTextContent("Mode: mock");
@@ -195,20 +195,20 @@ describe("rule 19: server-backed mode", () => {
   it("each switch POSTs /api/mode with exactly {source} and the page reloads its data", async () => {
     await mount();
     seen.length = 0;
-    await click("mode-live");
+    await click("mode-select", "real");
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/), T);
     expect(seen.some((r) => r.url.endsWith("/api/mode") && r.body === JSON.stringify({ source: "real" }))).toBe(true);
     expect(seen.some((r) => r.url.includes("/api/state?"))).toBe(true);
     expect(screen.getByTestId("mode")).toHaveTextContent("Mode: live");
     seen.length = 0;
-    await click("mode-mock");
+    await click("mode-select", "mock");
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
     expect(seen.some((r) => r.url.endsWith("/api/mode") && r.body === JSON.stringify({ source: "mock" }))).toBe(true);
     expect(screen.getByTestId("mode")).toHaveTextContent("Mode: mock");
   });
   it("the mode the server holds survives a reload, and a bad body is refused 400", async () => {
     await mount();
-    await click("mode-live");
+    await click("mode-select", "real");
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/), T);
     cleanup(); render(<App />);
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/), T);
