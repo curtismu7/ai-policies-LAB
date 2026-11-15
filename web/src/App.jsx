@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu";
 import ShelfLink from "./components/ShelfLink";
+import VerifyMark from "./components/VerifyMark";
 import EvaluateTab from "./components/EvaluateTab";
 import PoliciesTab from "./components/PoliciesTab";
 import ApprovalsTab from "./components/ApprovalsTab";
@@ -150,6 +151,7 @@ export default function App() {
               onReset={reset}
             >
               <ShelfLink />
+              <VerifyMark id="ai-policies-lab" />
             </TopMenu>
             <span className="chip" data-testid="mode">Mode: {mode || "..."}{mode === "live" ? " (local engine, loopback)" : mode === "mock" ? " (tables)" : ""}</span>
           </div>
