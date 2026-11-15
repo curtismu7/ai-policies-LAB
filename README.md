@@ -6,7 +6,7 @@ Tier: Demo
 Repo: https://github.com/curtismu7/ai-policies-LAB
 Catalog: D109
 
-**Tier: Demo.** Source: the Ping ID4AI Workforce H2 2026 deck, slide 52 (with 35, 36 and 48), release 2026-11-02. **Every product claim is a Ping release claim, UNVERIFIED on our tenant.** Mock calls nothing outside your machine. Real adds exactly one optional call: the Privilege gateway card (see "Real mode: through the PingOne Privilege gateway" below). No identity provider, chat tool, ticket system or tenant is called.
+**Tier: Demo.** Source: the Ping ID4AI Workforce H2 2026 deck, slide 52 (with 35, 36 and 48), release 2026-11-02. **Every product claim is a Ping release claim, UNVERIFIED on our tenant.** Nothing here calls a real gateway, identity provider, chat tool, ticket system or tenant, and nothing leaves your machine.
 
 ## What is simulated
 
@@ -52,7 +52,7 @@ The deck gives claims; our own notes give measured behaviour on our tenant; the 
 - Keys sent twice inside an arguments OBJECT of an HTTP request body are resolved last-wins by the JSON body parser before the lab sees them (a duplicate cannot be seen after that). Send the arguments as text (`argumentsText`, which the Evaluate tab does) and duplicate keys are refused.
 - A lab fault injected into the token stage answers 403, not 401: the fault stands for an evaluation error inside the stage, not for a token that failed to verify.
 - The Mock drift test regenerates the table from the same Engine; a second test replays every scripted step through the real Live HTTP API in all three verticals and compares the results with the table.
-- **Masking is a heuristic, with stated limits.** One masker for everything: the shared masker 1.4.0 (`server/src/shared/mask.js`, copied unchanged from shared-masker commit 9bc664a; `server/src/mask.js` and `server/src/credentials.js` are the lab's thin adapters). It reads free text, claim values, argument values and every answer through the same views: invisible and format characters, controls, look-alike letters, HTML, percent and backslash encodings, white space inside a keyword (`pass<TAB>word`, `pass<U+1680>word`, `pass<U+2028>word`) and line breaks. It finds assignments (`password: x`, `login: bob / x`, `password - x`, `my password is x`, `Bearer<TAB>x`), URL passwords, tokens, JWTs, key blocks and long opaque runs, and it masks object KEYS as well as values (`{"password hunter2xyz": ...}` loses the key text), reading a key by its words (`password`, `token`, `api_key`, `userPassword`, look-alikes, numbering). A mark names its rule, for example `[masked:assignment]`. Text is masked as typed and BEFORE it is cut. `cleanFree` then makes each control or bidi-control character one space and collapses white space; it deletes nothing, because deleting the characters between the letters of a value the masker did not find would make that value readable. Text that was only encoded is shown as typed, not decoded. The canonical form of a call is parsed and its DATA is masked, then written again. The lab's own mock-issued token (at `result.labToken` of the mint answer, as a JWT) and the 64-hex call hash, 32-hex trace id and `traceparent` the lab writes are left alone ONLY when the value has exactly that shape, so a visitor who types a key named `hash` gets no free pass. One more member is left alone: the shortened session id in the Real trace (`trace.listing|refusal.request|response.headers.mcp-session-id`, at most 8 safe characters plus the `… (shortened)` mark, as the shared gateway hop writes it); the same header name anywhere else, or a longer or secret-shaped value in it, is masked. The lab's own story, diagrams, `/api/info` and Mock tables are masked as prose (credential-word key names are not read there, so `"authLevels": {"1": "password"}` is not a pair); every answer that carries anything a visitor typed is masked with keys read.
+- **Masking is a heuristic, with stated limits.** One masker for everything: the shared masker 1.4.0 (`server/src/shared/mask.js`, copied unchanged from shared-masker commit 9bc664a; `server/src/mask.js` and `server/src/credentials.js` are the lab's thin adapters). It reads free text, claim values, argument values and every answer through the same views: invisible and format characters, controls, look-alike letters, HTML, percent and backslash encodings, white space inside a keyword (`pass<TAB>word`, `pass<U+1680>word`, `pass<U+2028>word`) and line breaks. It finds assignments (`password: x`, `login: bob / x`, `password - x`, `my password is x`, `Bearer<TAB>x`), URL passwords, tokens, JWTs, key blocks and long opaque runs, and it masks object KEYS as well as values (`{"password hunter2xyz": ...}` loses the key text), reading a key by its words (`password`, `token`, `api_key`, `userPassword`, look-alikes, numbering). A mark names its rule, for example `[masked:assignment]`. Text is masked as typed and BEFORE it is cut. `cleanFree` then makes each control or bidi-control character one space and collapses white space; it deletes nothing, because deleting the characters between the letters of a value the masker did not find would make that value readable. Text that was only encoded is shown as typed, not decoded. The canonical form of a call is parsed and its DATA is masked, then written again. The lab's own mock-issued token (at `result.labToken` of the mint answer, as a JWT) and the 64-hex call hash, 32-hex trace id and `traceparent` the lab writes are left alone ONLY when the value has exactly that shape, so a visitor who types a key named `hash` gets no free pass. The lab's own story, diagrams, `/api/info` and Mock tables are masked as prose (credential-word key names are not read there, so `"authLevels": {"1": "password"}` is not a pair); every answer that carries anything a visitor typed is masked with keys read.
   **Not masked (pinned with literal outputs in `server/test/masker-adoption.test.js`):** a passphrase of plain words (`passphrase: correct horse battery` is left; unquoted, only the first word is masked, quoted the whole phrase is), a bare random key of 31 characters or fewer with no keyword before it (32 and more are `[masked:opaque]`), a long hex run with no digit, a `ghp_` token with fewer than 16 characters after the prefix, `password hunter_xyz` (an underscore is not a symbol), `session: Ab1x23`, a lowercase dictionary word after a bare keyword (`password hunter`), a short random password with no keyword (`p@ssw0rd`), and a keyword glued to its value (`passwordhunter2xyz`). The lab's own masker used to mask the first six of these, so this adoption is a loss there and a gain on the leaks listed above (a keyword broken by U+1680, TAB or U+2028; `login: bob / x`; `password - x`; `Bearer<TAB>x`; `password<TAB>x`; secret object keys; the false positive `the token is accepted`).
   **False positives you will see:** a 32-character or longer id with a digit (`payments-report-2026-q4-final-v2`) reads as `[masked:opaque]` (a rule id of that shape is refused at save), `Session: Q3-review2` is masked as a cookie, a workspace id that STARTS with a credential word and a hyphen (`password-reset`, `token-abc`) is refused as credential-looking (`w-password-reset` is fine), and a claim named like a weak credential word (`pin`, `session`, `sid`, `auth`, `login`, `code`, `key`) is refused. Measured on the shared corpora run through the lab's adapter: 3754 leak probes (338 structured), none survives; 1926 ordinary strings (109 structured), none changes. Do not type a real secret.
 - **HTTP edge.** A Content-Type charset other than utf-8 is a 415 `unsupported_charset` with a fixed body (nothing typed is answered or logged). A known route called with another method is a 405 with `Allow`, read from ONE route table in `app.js` (`API_ROUTES`); an unknown path is the fixed JSON 404. A credential-looking workspace id (`isCredentialId`: `pw-`, `token-`, `sk-` prefixes, 24 or more hex characters, anything the masker flags) is a 400 `bad_workspace` before a workspace slot exists and is never echoed. The page shell answers only GET or HEAD for a page address (`isPageAddress`) from a client that accepts `text/html`; a missing asset, map, icon or dotfile is the JSON 404. The last handler sends 400, 413, 415 or 500 with a fixed code and never the error message. Every JSON answer, including these, passes the response mask on values and keys.
@@ -73,11 +73,11 @@ Open http://localhost:7500/. Or in one step: `./scripts/run.sh` (installs and bu
 
 ## Settings file
 
-All standalone apps read one settings file, `~/Development/.env`, which must be mode 600. `STANDALONE_ENV` overrides its path. This lab needs none of it for Mock or for its own Live engine. It parses the file (`util.parseEnv`) and takes exactly one optional key; no other key from the file ever enters the server's environment:
+All standalone apps read one settings file, `~/Development/.env`, which must be mode 600. `STANDALONE_ENV` overrides its path. This lab needs none of it. It parses the file (`util.parseEnv`) and takes exactly one optional key; no other key from the file ever enters the server's environment:
 
 - `AIP_LAB_MODE` (optional): `mock` (default) or `live`, the mode the page opens in. The header toggle switches per visit. A bare `MODE` in the shared file is ignored, because it may belong to another app.
 
-The shared file holds no `PORT`: the lab keeps its port default in code. Admin or worker credentials never belong in that file, and this lab uses none. In Real, the gateway check reads its own `APL_GW_*` keys (below) from this file or the environment; they are used only for that call and never shown. The doctor reports whether the file exists and its mode, and never prints a value.
+The shared file holds no `PORT`: the lab keeps its port default in code. Admin or worker credentials never belong in that file, and this lab uses none. It holds no credential for any real system. The doctor reports whether the file exists and its mode, and never prints a value.
 
 ## Ports, and what to do if the port is taken
 
@@ -99,8 +99,6 @@ Other variables: `VITE_PORT` (Vite dev server, default 7501, `npm run dev -w web
 ## Mock and live modes
 
 The header has a **Mock / Live** toggle on every page, and the banner and the mode chip show the same mode. Mock reads tables generated from the engine (six scripted scenarios per vertical; a scenario picker on the Evaluate tab) and is read-only: every write control is off and the API answers 409. Live drives this workspace's engine (one per vertical): it mints tokens, evaluates your calls, keeps the approvals, outbox, audit trail and lab clock, and lets you edit the policy.
-
-**What Privilege did (rule 25).** Under each evaluation on the Evaluate tab (a Mock step, or a Live run) the shared `GatewayTrace` panel shows the call this lab's gateway read, the decision it answered, and what each of the ten layers decided. Both modes run the lab's own in-process engine, so every decision is marked "checked" (the engine computed it) and the trace is labelled simulated; no real Privilege gateway is called for an evaluation (the Real-only gateway check has its own trace, below). A hold shows as information, never as passed. The token is never repeated in the panel. The panel files are copied unchanged from the family's `shared/gateway-trace` and pinned by `web/src/gateway-trace/gateway-trace.sha256`; this lab's own builder is `server/src/policyTrace.js`.
 
 ## Health, doctor and reset
 
@@ -127,7 +125,7 @@ npm test    # server (node --test), web (vitest, drives the UI against the real 
 
 The shared checks are run by hand, because the scripts are not shipped into this repo's CI: `bash <AI-DEMO-Standalone>/scripts/check-drift.sh .`, `bash <AI-DEMO-Standalone>/scripts/check-css.sh .` and `node <demo-kit-base>/scripts/conformance.mjs . --new`.
 
-On Node 26: 374 tests pass (304 server, 43 web, 27 scripts).
+On Node 26: 331 tests pass (287 server, 21 web, 23 scripts).
 
 ## Troubleshooting
 
@@ -158,24 +156,21 @@ No SE k8s build (deferred by the owner, 2026-10-31). Every product claim stays U
 
 ## Real mode: through the PingOne Privilege gateway
 
-Real here has two parts. The lab's own engine still evaluates your calls (that is what the tabs show). On top of that, Real shows one live call
-through a PingOne Privilege gateway (the origin you set in `APL_GW_URL`) with an agent access key from the shared settings file
-(`~/Development/.env`, or the file `STANDALONE_ENV` names). Mock never makes that call: the card is not shown and `POST /api/gateway-check` answers 409.
+Real mode here is one live call through the SE PingOne Privilege gateway
+(`https://mcpgw.ai-demo.ping-devops.com`) with an agent access key from the shared settings
+file (`~/Development/.env`, or the file `STANDALONE_ENV` names).
 
 **Privilege objects this lab uses:**
 
 | Object | Value |
 |---|---|
-| Gateway | the origin in `APL_GW_URL` (a PingOne Privilege gateway you can reach), e.g. `https://<gateway-host>` |
-| Agentic App | one named in `APL_GW_APPS` (for example `<app-name>`), client path `/<app>/mcp` |
-| Caller | an agent access key `APL_GW_KEY_<NAME>` (write-only, never shown) |
-| Backend | whatever MCP members the Agentic App aggregates; the check only needs `tools/list` and a tool nothing grants |
+| Gateway | `mcpgw.ai-demo.ping-devops.com` (cluster `ai-demo-cmuir`) |
+| Door (Agentic App) | `aggregate-limited` — client path `/aggregate-limited/mcp` |
+| Caller | agent access key `APL_GW_KEY_LAB_AGENT` (write-only, never shown) |
+| Backend | `aggregate` = the gateway's MCP aggregate over `opensearch` (9 tools) + `banking-mcp` (33 tools); `aggregate-limited` = the same members with a tool filter |
 
-**What runs in Real:** the **Privilege gateway** card at the top of the page (`POST /api/gateway-check`) runs one live `tools/list` through the
-Agentic App with the key, then one `tools/call` probe of a tool no policy grants, so you see the gateway's own refusal shape. It runs when you
-switch to Real and when you press **Run the gateway check**. The gateway's words come back unaltered (keys scrubbed). With no `APL_GW_*` settings the card says what is missing and
-nothing is called. Settings keys: `APL_GW_URL`, `APL_GW_APPS`, `APL_GW_KEY_<NAME>` (optional `APL_GW_VERSION`). The netguard allows exactly that one origin, and only once a check runs.
-
-**What Privilege did, for the gateway check.** **Show what Privilege did** draws the shared `GatewayTrace` panel (source `real`) from the
-card's own answer, with no second call to the gateway: the exact request and response of `tools/list` and of the refusal probe, from the shared hop's capture. A real gateway reports no per-check detail, so each decision is **observed** (read from the response) or **inferred**
-(read from the outcome, for example "refused by policy" from an HTTP 403), never **checked**; the agent key is redacted at capture and never appears. The trace builder is `traceFromDoor` in `server/src/gatewayTrace.js`; the hop is `server/src/gatewayReal.js` (vendored byte for byte from the family's `shared/gateway-real`), the card is `web/src/privilege-check/` (vendored from `shared/privilege-check`).
+**What runs in Real:** the **Privilege gateway check** (`POST /api/gateway-check`, card on the
+page) — one live `tools/list` through the door with the key, then one `tools/call` probe of a
+tool no policy grants, so you see the gateway's own refusal shape. The gateway's words come
+back unaltered (keys scrubbed). Settings keys: `APL_GW_URL`, `APL_GW_APPS`,
+`APL_GW_KEY_<NAME>` (optional `APL_GW_VERSION`).

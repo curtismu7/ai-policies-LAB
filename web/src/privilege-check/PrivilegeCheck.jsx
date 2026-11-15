@@ -3,7 +3,7 @@
 // shows the live hop: door, caller, tool count and round-trip time, plus the gateway's own
 // refusal shape for a tool no policy grants. The agent key is never displayed: the server
 // scrubs every message. No dependency beyond React and the shared standalone-ui.css tokens.
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import './privilege-check.css';
 
 const LAYER_LABEL = {
@@ -14,24 +14,15 @@ const LAYER_LABEL = {
   other: 'the gateway refused (see its own words below)',
 };
 
-export default function PrivilegeCheck({ apiBase = '', title = 'Privilege gateway', primaryRetry = false, onResult }) {
+export default function PrivilegeCheck({ apiBase = '', title = 'Privilege gateway' }) {
   const [state, setState] = useState({ phase: 'idle' });
-  // onResult is read through a ref so a new callback each render never re-runs the check.
-  const onResultRef = useRef(onResult);
-  onResultRef.current = onResult;
-
-  // One completed check: show it, and hand the lab the same object (a throwing callback never changes the card).
-  const settle = useCallback((next) => {
-    setState(next);
-    try { onResultRef.current?.(next); } catch { /* the lab's callback is its own business */ }
-  }, []);
 
   const refresh = useCallback(async () => {
     setState({ phase: 'checking' });
     try {
       const info = await fetch(`${apiBase}/api/info`, { headers: { accept: 'application/json' } }).then((r) => r.json());
       if (!info.realAvailable) {
-        settle({ phase: 'not-configured', reason: info.realReason || info.realHowTo || 'Real is not configured.' });
+        setState({ phase: 'not-configured', reason: info.realReason || info.realHowTo || 'Real is not configured.' });
         return;
       }
       const res = await fetch(`${apiBase}/api/gateway-check`, {
@@ -41,15 +32,15 @@ export default function PrivilegeCheck({ apiBase = '', title = 'Privilege gatewa
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        settle({ phase: 'error', reason: err.message || err.realReason || err.fix || `the lab answered ${res.status}` });
+        setState({ phase: 'error', reason: err.message || err.realReason || err.fix || `the lab answered ${res.status}` });
         return;
       }
       const out = await res.json();
-      settle({ phase: 'done', ...out });
+      setState({ phase: 'done', ...out });
     } catch (e) {
-      settle({ phase: 'error', reason: String(e?.message || e).slice(0, 200) });
+      setState({ phase: 'error', reason: String(e?.message || e).slice(0, 200) });
     }
-  }, [apiBase, settle]);
+  }, [apiBase]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -57,15 +48,9 @@ export default function PrivilegeCheck({ apiBase = '', title = 'Privilege gatewa
     <section className="pcard" data-testid="privilege-check" aria-label={title}>
       <header className="pcard__head">
         <h3 className="pcard__title">{title}</h3>
-        {primaryRetry ? (
-          <button type="button" className="pcard__retry primary" onClick={refresh} disabled={state.phase === 'checking'}>
-            {state.phase === 'checking' ? 'Checking…' : 'Run the gateway check'}
-          </button>
-        ) : (
-          <button type="button" className="pcard__retry" onClick={refresh} disabled={state.phase === 'checking'}>
-            {state.phase === 'checking' ? 'Checking…' : 'Run the gateway check'}
-          </button>
-        )}
+        <button type="button" className="pcard__retry" onClick={refresh} disabled={state.phase === 'checking'}>
+          {state.phase === 'checking' ? 'Checking…' : 'Run the gateway check'}
+        </button>
       </header>
 
       {state.phase === 'checking' && <p className="pcard__note">Calling the live gateway door…</p>}

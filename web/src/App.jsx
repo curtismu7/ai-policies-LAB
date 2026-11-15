@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu";
 import ShelfLink from "./components/ShelfLink";
-import VerifyMark from "./components/VerifyMark";
 import EvaluateTab from "./components/EvaluateTab";
 import PoliciesTab from "./components/PoliciesTab";
 import ApprovalsTab from "./components/ApprovalsTab";
@@ -14,7 +13,7 @@ import useLab from "./hooks/useLab";
 import useEvaluator from "./hooks/useEvaluator";
 import { buildPresets } from "./presets";
 import { getJson, postJson, resetWorkspace } from "./api";
-import GatewayHop from "./components/GatewayHop";
+import PrivilegeCheck from "./privilege-check/PrivilegeCheck.jsx";
 
 export const TABS = [
   { id: "evaluate", label: "Evaluate" },
@@ -26,8 +25,8 @@ export const TABS = [
   { id: "talk", label: "Talk track" },
 ];
 // The banner is never blank and never claims one mode before it knows: until the story answers it says both, honestly.
-const TAIL = "Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). No identity provider, chat tool or tenant is called; the only real call is the optional Privilege gateway card, in Real.";
-export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (Mock is loopback only with no outbound network). ${TAIL}`;
+const TAIL = "Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). Nothing here calls a real gateway, identity provider, chat tool or tenant.";
+export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (loopback only, no outbound network). ${TAIL}`;
 const PRESENTER_TALK = { evaluate: ["say-first", "two-controls", "four-layers"], policies: ["four-layers"], approvals: ["hold", "bound", "period"], where: ["where", "hard"], closed: ["closed"], diagram: ["why-ai-policies"] };
 
 const THEME_KEY = "aip.theme";
@@ -63,6 +62,7 @@ export default function App() {
   // The picker only sets data-theme; the shared stylesheet does the rest ("auto" follows the system setting).
   useEffect(() => { if (theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { applyFontSize(fontStep); try { localStorage.setItem(FONT_KEY, fontStep); } catch { /* not remembered */ } }, [fontStep]);
+  const tabsRef = useRef(null);
   const lab = useLab({ mode, vertical, scenario: scenarioId });
   const ev = useEvaluator(lab);
   const presets = useMemo(() => (story ? buildPresets(story.cast) : []), [story]);
@@ -80,7 +80,7 @@ export default function App() {
   }, []);
   useEffect(() => { ev.setForm(null); ev.setDecision(null); }, [mode, vertical]); // eslint-disable-line react-hooks/exhaustive-deps
   // Rule 19: switching is a server call (POST /api/mode with exactly {source}), then the data reloads so the banner,
-  // mode badge and every tab reflect the mode the server answered with.
+  // mode chip and every tab reflect the mode the server answered with.
   const [modeError, setModeError] = useState(null);
   const setMode = async (m) => {
     setModeError(null);
@@ -90,6 +90,14 @@ export default function App() {
     await lab.reload();
   };
   const select = (id) => { setTab(id); try { window.history.replaceState(null, "", `#${id}`); } catch { /* ignore */ } };
+
+  // Keep the active tab fully in view in the scrolling tab strip (375px).
+  useEffect(() => {
+    const strip = tabsRef.current; const el = document.getElementById(`tab-${tab}`);
+    if (!strip || !el) return;
+    const left = el.offsetLeft - strip.offsetLeft;
+    if (left < strip.scrollLeft || left + el.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = Math.max(0, left - 8);
+  }, [tab]);
 
   useEffect(() => {
     const on = (e) => {
@@ -111,45 +119,54 @@ export default function App() {
     setResetMsg(ok ? "Reset: your workspace's approvals, outbox, audit trail, edited policy and the lab clock are back to the start, and the diagram is back in place." : "Reset failed on the server; the view was reloaded.");
   }, [lab.reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const onKeyTab = (e, i) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const next = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+    select(next.id);
+    document.getElementById(`tab-${next.id}`)?.focus();
+  };
+
   const banner = story && mode ? story.banner[mode] : BANNER_UNKNOWN;
   const ready = story && mode;
   const props = { story, mode, vertical, lab };
   return (
     <div className={`app${presenter ? " app--presenter" : ""}`}>
-      <header className="shell-bar">
-        <span className="shell-brand">
-          <span className="shell-logo" aria-hidden="true">AIP</span>
-          <h1>AI Policies LAB</h1>
-          <span className={`shell-badge${mode === "live" ? " shell-badge--real" : ""}`} data-testid="mode"
-            title={mode === "live" ? "Live: the local engine, loopback" : mode === "mock" ? "Mock: tables" : undefined}>{mode === "live" ? "Live" : mode === "mock" ? "Mock" : "..."}</span>
-        </span>
-        <nav className="shell-nav" aria-label="Lab sections">
-          {TABS.map((t) => (
-            <a key={t.id} href={`#${t.id}`} aria-current={tab === t.id ? "page" : undefined}
-              onClick={(e) => { e.preventDefault(); select(t.id); }}>{t.label}</a>
-          ))}
-        </nav>
-        <TopMenu
-          mode={{ value: mode === "live" ? "real" : "mock", onChange: (v) => setMode(v === "real" ? "live" : "mock"), realAvailable: true }}
-          vertical={{ value: vertical, onChange: setVertical, options: story ? story.verticals : ["finance"] }}
-          theme={{ value: theme, onChange: pickTheme }}
-          fontSize={{ value: fontStep, onChange: setFontStep }}
-          present={{ active: presenter, onToggle: () => setPresenter((v) => !v) }}
-          talkTrack={{ active: tab === "talk", onToggle: () => select("talk") }}
-          help={{ href: "https://github.com/curtismu7/ai-policies-LAB#readme" }}
-          onReset={reset}
-        >
-          <ShelfLink />
-          <VerifyMark id="ai-policies-lab" />
-        </TopMenu>
-      </header>
-      <main className="page">
+      <header>
         <p className="banner" role="status" data-state={mode === "live" ? "live" : "mock"} data-testid="banner">{banner}</p>
         {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
+        <div className="head">
+          <div>
+            <h1 className="head__title">AI Policies LAB</h1>
+            {!presenter && story && <p className="head__intro">{story.intro}</p>}
+          </div>
+          <div className="head__tools">
+            <TopMenu
+              mode={{ value: mode === "live" ? "real" : "mock", onChange: (v) => setMode(v === "real" ? "live" : "mock"), realAvailable: true }}
+              vertical={{ value: vertical, onChange: setVertical, options: story ? story.verticals : ["finance"] }}
+              theme={{ value: theme, onChange: pickTheme }}
+              fontSize={{ value: fontStep, onChange: setFontStep }}
+              present={{ active: presenter, onToggle: () => setPresenter((v) => !v) }}
+              talkTrack={{ active: tab === "talk", onToggle: () => select("talk") }}
+              help={{ href: "https://github.com/curtismu7/ai-policies-LAB#readme" }}
+              onReset={reset}
+            >
+              <ShelfLink />
+            </TopMenu>
+            <span className="chip" data-testid="mode">Mode: {mode || "..."}{mode === "live" ? " (local engine, loopback)" : mode === "mock" ? " (tables)" : ""}</span>
+          </div>
+        </div>
+      </header>
+      <main>
+
+        <PrivilegeCheck />
         <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
-        {!presenter && story && <p className="page-intro">{story.intro}</p>}
-        {mode === "live" && <GatewayHop />}
-        <div id={`panel-${tab}`} className="page-panel">
+        <div role="tablist" aria-label="Lab sections" className="tabs" ref={tabsRef}>
+          {TABS.map((t, i) => (
+            <button key={t.id} id={`tab-${t.id}`} role="tab" type="button" aria-selected={tab === t.id} aria-controls={`panel-${t.id}`} tabIndex={tab === t.id ? 0 : -1}
+              onClick={() => select(t.id)} onKeyDown={(e) => onKeyTab(e, i)}>{t.label}</button>
+          ))}
+        </div>
+        <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {error || lab.error ? <p className="app-error" role="alert">Could not load the lab ({error || lab.error}). Is the server running?</p> : !ready ? <p className="muted">Loading...</p> : (
             <>
               {presenter && tab !== "talk" && (
