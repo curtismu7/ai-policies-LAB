@@ -55,7 +55,7 @@ export default function ApprovalsTab({ story, mode, lab, ev }) {
             <tbody>{s.outbox.map((o) => <tr key={o.id}><td><code>{o.ref}</code></td><td>{o.label}</td><td>{o.to.join(", ")}</td><td>{o.subject}</td><td>{o.expiresAt}</td></tr>)}</tbody></table></div>
         )}
       </section>
-      <details className="panel"><summary>Audit trail ({s.audit.length})</summary><Json value={s.audit.slice(-30)} label="audit" /></details>
+      <details className="panel"><summary>Audit trail ({s.audit.length})</summary><Json value={s.audit.slice(-30)} label="audit" hot={["identity", "code", "approval"]} /></details>
     </div>
   );
 }

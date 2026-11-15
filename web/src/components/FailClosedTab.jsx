@@ -38,7 +38,7 @@ export default function FailClosedTab({ story, mode, lab, ev, presets }) {
           <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} data-testid="canon-input" spellCheck={false} />
         </label>
         <div className="seg"><button type="button" onClick={calc} data-testid="canon-run">Compute the hash</button></div>
-        {out ? (out.ok ? <div data-testid="canon-result"><p>Hash <code data-testid="canon-hash">{out.hash}</code></p><Json value={out.canonical} label="canonical" /></div> : <p className="field-error" role="alert" data-testid="canon-refused"><code>{out.code}</code>: {visible(out.reason || "")}</p>) : null}
+        {out ? (out.ok ? <div data-testid="canon-result"><p>Hash <code data-testid="canon-hash">{out.hash}</code></p><Json value={out.canonical} label="canonical" hot={["method", "target"]} /><p className="muted exact">Exact text that was hashed: <code>{visible(out.canonical)}</code></p></div> : <p className="field-error" role="alert" data-testid="canon-refused"><code>{out.code}</code>: {visible(out.reason || "")}</p>) : null}
       </section>
     </div>
   );

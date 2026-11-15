@@ -31,9 +31,9 @@ function MockScenarios({ story, lab, scenarioId, setScenarioId, step, setStep })
         <section className="panel" data-testid="step-detail">
           <h3 className="panel__sub">{s.title}</h3>
           <p>{s.say}</p>
-          {s.claims ? <details><summary>The claims in the token for this step{s.tampered ? " (one character changed after signing)" : ""} <SourceTag source="invented" /></summary><Json value={s.claims} label="claims" /></details> : null}
-          {s.request ? <details><summary>The {s.op === "evaluate" ? "call" : "request"}</summary><Json value={s.request} label="request" /></details> : null}
-          {s.op !== "evaluate" ? <Json value={s.result} label="result" testId="step-result" /> : null}
+          {s.claims ? <details><summary>The claims in the token for this step{s.tampered ? " (one character changed after signing)" : ""} <SourceTag source="invented" /></summary><Json value={s.claims} label="claims" hot={["surfaces", "end_user", "department"]} /></details> : null}
+          {s.request ? <details><summary>The {s.op === "evaluate" ? "call" : "request"}</summary><Json value={s.request} label="request" hot={["route", "tool", "ref", "approver"]} /></details> : null}
+          {s.op !== "evaluate" ? <Json value={s.result} label="result" testId="step-result" hot={["code", "status"]} /> : null}
         </section>
       ) : null}
       {asDecision ? <Decision decision={{ result: asDecision, http: asDecision.http }} caption={`Step ${step + 1}`} /> : null}
