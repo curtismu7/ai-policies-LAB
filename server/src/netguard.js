@@ -62,7 +62,7 @@ export function installNetguard() {
     return real.lookup.call(dns, host, ...rest);
   };
   dns.promises.lookup = async function guardedPromiseLookup(host, ...rest) {
-    if (!isLoopbackHost(host) && host !== '0.0.0.0' && host !== '::' && !originAllowed(host)) { attempts.push(`dns:${host}`); throw new Error(`network blocked: ${host}`); }
+    if (!originAllowed(host) && !isLoopbackHost(host) && host !== '0.0.0.0' && host !== '::' && !originAllowed(host)) { attempts.push(`dns:${host}`); throw new Error(`network blocked: ${host}`); }
     return real.plookup.call(dns.promises, host, ...rest);
   };
   globalThis.fetch = async function guardedFetch(input, init) {
