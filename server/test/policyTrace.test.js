@@ -91,6 +91,30 @@ test('Live: an allowed call, a held call and a bad token each return a trace; th
   });
 });
 
+test('Live: the trace shows the whole request: a string over 300 characters, more than 10 items and 20 keys are not cut, and a secret inside them is still masked', async () => {
+  await withServer(async (url) => {
+    const token = await mint(url);
+    const key = SECRETS.openai;
+    const long = 'word '.repeat(190).trim(); // 949 characters, under the engine's 1000 limit
+    const noteWithKey = `${'abc '.repeat(74)}${key} ${'tail '.repeat(40)}end`; // the key sits across the old 300-character cut
+    const items = Array.from({ length: 30 }, (_, i) => `item-${i}`);
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`field${i}`, i]));
+    const args = { record: C.castRecord, long, noteWithKey, items, many };
+    const r = await evalReq(url, readCall(token, { arguments: args }));
+    assert.deepEqual(assertTrace(r.body.trace), []);
+    const shown = r.body.trace.request.body.arguments;
+    assert.equal(shown.long, long, 'a long string is shown whole');
+    assert.equal(shown.long.length, 949);
+    assert.deepEqual(shown.items, items, 'every item is shown');
+    assert.deepEqual(shown.many, many, 'every key is shown');
+    assert.ok(shown.noteWithKey.length > 300 && shown.noteWithKey.endsWith('tail end'), 'text after the old cut is shown');
+    const text = JSON.stringify(r.body.trace);
+    assert.ok(!text.includes(key), 'a typed key is still never in the trace');
+    assert.ok(!text.includes(token), 'the token is still never in the trace');
+    assert.match(shown.noteWithKey, /\[masked:/);
+  });
+});
+
 test('Live: a call without a token sends no Authorization header; a refused evaluation (not a gateway call) carries no trace', async () => {
   await withServer(async (url) => {
     const none = await evalReq(url, readCall(undefined));

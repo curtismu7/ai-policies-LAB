@@ -2,7 +2,7 @@
 // Privilege gateway is called here, so the trace is always source 'mock' and every decision is 'checked': engine.evaluate() computed each layer's
 // verdict, in order. The request is the call the lab's gateway read (route, tool, arguments, ...), shown as the lab received it: there is no JSON-RPC
 // message to invent. The response is the decision it returned, without its `trace` list (that list is the decisions shown beside it). The host is a
-// non-real one (.invalid). The token is never shown, only that one was sent. Pass an already-scrubbed request (service.js scrub), never the raw one.
+// non-real one (.invalid). The token is never shown, only that one was sent. Pass the request masked but whole (service.js scrubWhole): never cut, never the raw one.
 import { mockTrace } from './gatewayTrace.js';
 
 const PREFIX = { model: 'llm', tool: 'mcp', agent: 'a2a' };
