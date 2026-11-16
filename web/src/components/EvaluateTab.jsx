@@ -6,7 +6,7 @@ import GatewayTrace from "../gateway-trace/GatewayTrace";
 import { buildPresets, tamper } from "../presets";
 
 // Mock and Live both run this lab's own simulated gateway (Live's "Real" is the local engine, not Privilege), so the panel's default wording about Real mode would be wrong.
-const BASIS = "Simulated, in Mock and in Live: this lab's own in-process gateway engine ran the ten layers in order, so every decision here is what it computed (checked). No real Privilege gateway is called by this lab, and nothing leaves this machine.";
+const BASIS = "Simulated, in Mock and in Live: this lab's own in-process gateway engine ran the ten layers in order, so every decision here is what it computed (checked). Nothing in this panel is a real Privilege gateway call and the evaluation never leaves this machine; in Real, the one real gateway call is the Privilege gateway card at the top of the page.";
 const Trace = ({ trace }) => <GatewayTrace source="mock" basisNote={BASIS} exchanges={trace ? [{ step: 1, title: "Agent calls the gateway", status: trace.response?.status ?? null, trace }] : []} />;
 
 const FAULTS = ["", "request", "token", "surface", "application", "action", "end-user", "attended-unattended", "request-inspection", "call", "reply-inspection"];

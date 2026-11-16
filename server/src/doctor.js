@@ -89,7 +89,7 @@ export async function runChecks({ env = process.env, table = MOCK_TABLE } = {}) 
   const ng = await netguardSelfTest();
   add('netguard', ng.ok ? 'pass' : 'fail', ng.ok ? `blocked fetch, socket, socket-by-IP, dns lookup, dns resolve and udp to a non-loopback host (${ng.blocked}/6)` : ng.detail);
 
-  add('tenant', 'pass', 'simulated only: no tenant, no credentials, no outbound network; every product claim is UNVERIFIED on our tenant');
+  add('tenant', 'pass', 'simulated only: no tenant; the only outbound call is the optional Privilege gateway check in Real, to the one origin you set (APL_GW_URL), with an agent key from the shared settings file; every product claim is UNVERIFIED on our tenant');
   return checks;
 }
 

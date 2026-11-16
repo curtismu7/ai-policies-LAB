@@ -6,7 +6,7 @@ Tier: Demo
 Repo: https://github.com/curtismu7/ai-policies-LAB
 Catalog: D109
 
-**Tier: Demo.** Source: the Ping ID4AI Workforce H2 2026 deck, slide 52 (with 35, 36 and 48), release 2026-11-02. **Every product claim is a Ping release claim, UNVERIFIED on our tenant.** Nothing here calls a real gateway, identity provider, chat tool, ticket system or tenant, and nothing leaves your machine.
+**Tier: Demo.** Source: the Ping ID4AI Workforce H2 2026 deck, slide 52 (with 35, 36 and 48), release 2026-11-02. **Every product claim is a Ping release claim, UNVERIFIED on our tenant.** Mock calls nothing outside your machine. Real adds exactly one optional call: the Privilege gateway card (see "Real mode: through the PingOne Privilege gateway" below). No identity provider, chat tool, ticket system or tenant is called.
 
 ## What is simulated
 
@@ -73,11 +73,11 @@ Open http://localhost:7500/. Or in one step: `./scripts/run.sh` (installs and bu
 
 ## Settings file
 
-All standalone apps read one settings file, `~/Development/.env`, which must be mode 600. `STANDALONE_ENV` overrides its path. This lab needs none of it. It parses the file (`util.parseEnv`) and takes exactly one optional key; no other key from the file ever enters the server's environment:
+All standalone apps read one settings file, `~/Development/.env`, which must be mode 600. `STANDALONE_ENV` overrides its path. This lab needs none of it for Mock or for its own Live engine. It parses the file (`util.parseEnv`) and takes exactly one optional key; no other key from the file ever enters the server's environment:
 
 - `AIP_LAB_MODE` (optional): `mock` (default) or `live`, the mode the page opens in. The header toggle switches per visit. A bare `MODE` in the shared file is ignored, because it may belong to another app.
 
-The shared file holds no `PORT`: the lab keeps its port default in code. Admin or worker credentials never belong in that file, and this lab uses none. It holds no credential for any real system. The doctor reports whether the file exists and its mode, and never prints a value.
+The shared file holds no `PORT`: the lab keeps its port default in code. Admin or worker credentials never belong in that file, and this lab uses none. In Real, the gateway check reads its own `APL_GW_*` keys (below) from this file or the environment; they are used only for that call and never shown. The doctor reports whether the file exists and its mode, and never prints a value.
 
 ## Ports, and what to do if the port is taken
 
@@ -100,7 +100,7 @@ Other variables: `VITE_PORT` (Vite dev server, default 7501, `npm run dev -w web
 
 The header has a **Mock / Live** toggle on every page, and the banner and the mode chip show the same mode. Mock reads tables generated from the engine (six scripted scenarios per vertical; a scenario picker on the Evaluate tab) and is read-only: every write control is off and the API answers 409. Live drives this workspace's engine (one per vertical): it mints tokens, evaluates your calls, keeps the approvals, outbox, audit trail and lab clock, and lets you edit the policy.
 
-**What Privilege did (rule 25).** Under each evaluation on the Evaluate tab (a Mock step, or a Live run) the shared `GatewayTrace` panel shows the call this lab's gateway read, the decision it answered, and what each of the ten layers decided. Both modes run the lab's own in-process engine, so every decision is marked "checked" (the engine computed it) and the trace is labelled simulated; no real Privilege gateway is called here. A hold shows as information, never as passed. The token is never repeated in the panel. The panel files are copied unchanged from the family's `shared/gateway-trace` and pinned by `web/src/gateway-trace/gateway-trace.sha256`; this lab's own builder is `server/src/policyTrace.js`.
+**What Privilege did (rule 25).** Under each evaluation on the Evaluate tab (a Mock step, or a Live run) the shared `GatewayTrace` panel shows the call this lab's gateway read, the decision it answered, and what each of the ten layers decided. Both modes run the lab's own in-process engine, so every decision is marked "checked" (the engine computed it) and the trace is labelled simulated; no real Privilege gateway is called for an evaluation (the Real-only gateway check has its own trace, below). A hold shows as information, never as passed. The token is never repeated in the panel. The panel files are copied unchanged from the family's `shared/gateway-trace` and pinned by `web/src/gateway-trace/gateway-trace.sha256`; this lab's own builder is `server/src/policyTrace.js`.
 
 ## Health, doctor and reset
 
@@ -127,7 +127,7 @@ npm test    # server (node --test), web (vitest, drives the UI against the real 
 
 The shared checks are run by hand, because the scripts are not shipped into this repo's CI: `bash <AI-DEMO-Standalone>/scripts/check-drift.sh .`, `bash <AI-DEMO-Standalone>/scripts/check-css.sh .` and `node <demo-kit-base>/scripts/conformance.mjs . --new`.
 
-On Node 26: 363 tests pass (296 server, 40 web, 27 scripts).
+On Node 26: 374 tests pass (304 server, 43 web, 27 scripts).
 
 ## Troubleshooting
 
@@ -158,21 +158,24 @@ No SE k8s build (deferred by the owner, 2026-10-31). Every product claim stays U
 
 ## Real mode: through the PingOne Privilege gateway
 
-Real mode here is one live call through a PingOne Privilege gateway
-(the origin you set in `APL_GW_URL`, for example `https://<gateway-host>`) with an agent access key from the shared settings
-file (`~/Development/.env`, or the file `STANDALONE_ENV` names).
+Real here has two parts. The lab's own engine still evaluates your calls (that is what the tabs show). On top of that, Real shows one live call
+through a PingOne Privilege gateway (the origin you set in `APL_GW_URL`) with an agent access key from the shared settings file
+(`~/Development/.env`, or the file `STANDALONE_ENV` names). Mock never makes that call: the card is not shown and `POST /api/gateway-check` answers 409.
 
 **Privilege objects this lab uses:**
 
 | Object | Value |
 |---|---|
-| Gateway | the origin in `APL_GW_URL` (a PingOne Privilege gateway you can reach) |
-| Agentic App | one named in `APL_GW_APPS`, client path `/<app>/mcp` |
+| Gateway | the origin in `APL_GW_URL` (a PingOne Privilege gateway you can reach), e.g. `https://<gateway-host>` |
+| Agentic App | one named in `APL_GW_APPS` (for example `<app-name>`), client path `/<app>/mcp` |
 | Caller | an agent access key `APL_GW_KEY_<NAME>` (write-only, never shown) |
-| Backend | whatever MCP members the Agentic App aggregates |
+| Backend | whatever MCP members the Agentic App aggregates; the check only needs `tools/list` and a tool nothing grants |
 
-**What runs in Real:** the **Privilege gateway check** (`POST /api/gateway-check`, card on the
-page): one live `tools/list` through the Agentic App with the key, then one `tools/call` probe of a
-tool no policy grants, so you see the gateway's own refusal shape. The gateway's words come
-back unaltered (keys scrubbed). Settings keys: `APL_GW_URL`, `APL_GW_APPS`,
-`APL_GW_KEY_<NAME>` (optional `APL_GW_VERSION`).
+**What runs in Real:** the **Privilege gateway** card at the top of the page (`POST /api/gateway-check`) runs one live `tools/list` through the
+Agentic App with the key, then one `tools/call` probe of a tool no policy grants, so you see the gateway's own refusal shape. It runs when you
+switch to Real and when you press **Run the gateway check**. The gateway's words come back unaltered (keys scrubbed). With no `APL_GW_*` settings the card says what is missing and
+nothing is called. Settings keys: `APL_GW_URL`, `APL_GW_APPS`, `APL_GW_KEY_<NAME>` (optional `APL_GW_VERSION`). The netguard allows exactly that one origin, and only once a check runs.
+
+**What Privilege did, for the gateway check.** **Show what Privilege did** draws the shared `GatewayTrace` panel (source `real`) from the
+card's own answer, with no second call to the gateway: the exact request and response of `tools/list` and of the refusal probe, from the shared hop's capture. A real gateway reports no per-check detail, so each decision is **observed** (read from the response) or **inferred**
+(read from the outcome, for example "refused by policy" from an HTTP 403), never **checked**; the agent key is redacted at capture and never appears. The trace builder is `traceFromDoor` in `server/src/gatewayTrace.js`; the hop is `server/src/gatewayReal.js` (vendored byte for byte from the family's `shared/gateway-real`), the card is `web/src/privilege-check/` (vendored from `shared/privilege-check`).

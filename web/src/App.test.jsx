@@ -1,5 +1,6 @@
 // These tests drive the real UI against the real Express app (started on a loopback port inside the test), so a green run means the pieces
 // actually work together: the real story data, the real engine, the real Mock table.
+import http from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -19,6 +20,9 @@ let delay = () => 0;
 let override = () => null; // a test may answer a request itself
 let pending = 0;            // requests that have started and not yet answered
 beforeAll(async () => {
+  // The Real gateway hop reads the shared settings file; no test may reach for the author's own one.
+  process.env.STANDALONE_ENV = "/nonexistent/standalone.env";
+  for (const k of Object.keys(process.env)) if (k.startsWith("APL_GW_")) delete process.env[k];
   const health = createHealth({ runChecks: async () => [], intervalMs: 3_600_000 });
   ({ server, url: base } = await startHttpServer({ port: 0, host: "127.0.0.1", app: createApp({ health, configFile: "/nonexistent/customer.config.json" }) }));
   base = base.replace(/\/$/, "");
@@ -317,5 +321,76 @@ describe("diagram view at phone width (N2)", () => {
     const narrow = fitOptions(true);
     expect(narrow.nodes).toBeUndefined(); expect(narrow.maxZoom).toBeUndefined(); expect(narrow.minZoom).toBeLessThanOrEqual(0.15);
     expect(fitOptions(false)).toEqual({ padding: 0.12 });
+  });
+});
+
+describe("Real: the Privilege gateway card and What Privilege did", () => {
+  const KEY = ["fake", "agent", "key"].join("-") + "Q".repeat(24);
+  const gateway = () => http.createServer((req, res) => {
+    let raw = ""; req.on("data", (c) => { raw += c; });
+    req.on("end", () => {
+      if (req.method !== "POST") { res.writeHead(200).end(); return; }
+      const m = JSON.parse(raw || "{}");
+      const send = (status, body, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(body)); };
+      if (m.method === "initialize") return send(200, { jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2025-06-18", capabilities: {}, serverInfo: { name: "stub-door" } } }, { "mcp-session-id": "sess-1234567890abcdef" });
+      if (m.method === "notifications/initialized") { res.writeHead(202).end(); return; }
+      if (m.method === "tools/list") return send(200, { jsonrpc: "2.0", id: m.id, result: { tools: [{ name: "lookup", description: `echoes ${KEY}` }] } });
+      return send(403, { error: "refused by policy" });
+    });
+  });
+  const checks = () => seen.filter((x) => x.url.endsWith("/api/gateway-check")).length;
+  const hopCalls = (gw) => seen.filter((x) => x.url.startsWith(`http://127.0.0.1:${gw.address().port}`)).length;
+
+  it("Mock shows no gateway card and makes no gateway call; a direct check is refused 409", async () => {
+    await mount();
+    expect(screen.queryByTestId("privilege-check")).toBeNull();
+    expect(screen.queryByTestId("gateway-hop")).toBeNull();
+    expect(checks()).toBe(0);
+    const r = await fetch(`${base}/api/gateway-check`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(r.status).toBe(409);
+    expect((await r.json()).error).toBe("mock_mode");
+  });
+
+  it("Real without gateway settings: the card says what is missing and offers no trace", async () => {
+    await mount(); await live();
+    const card = await screen.findByTestId("privilege-check", {}, T);
+    await waitFor(() => expect(card).toHaveTextContent(/APL_GW_URL/), T);
+    expect(screen.queryByTestId("gateway-trace-run")).toBeNull();
+  });
+
+  it("Real: the card runs one check, the button draws the real trace from that same answer (no second call), decisions observed or inferred, no key", async () => {
+    const gw = gateway();
+    await new Promise((r) => gw.listen(0, "127.0.0.1", r));
+    const keep = ["APL_GW_URL", "APL_GW_APPS", "APL_GW_KEY_LAB"].map((k) => [k, process.env[k]]);
+    Object.assign(process.env, { APL_GW_URL: `http://127.0.0.1:${gw.address().port}`, APL_GW_APPS: "door-a", APL_GW_KEY_LAB: KEY });
+    // The server hop runs in this jsdom process, whose AbortSignal is not the one node's fetch accepts: the hop's timeout signal is dropped here only.
+    const patched = globalThis.fetch;
+    globalThis.fetch = (u, init) => patched(u, init?.signal ? { ...init, signal: undefined } : init);
+    try {
+      await mount();
+      expect(screen.queryByTestId("privilege-check")).toBeNull();
+      await live();
+      const card = await screen.findByTestId("privilege-check", {}, T);
+      await waitFor(() => expect(card).toHaveTextContent(/Refusal probe/), T);
+      expect(checks()).toBe(1);
+      const calls = hopCalls(gw);
+      expect(calls).toBeGreaterThan(0);
+      expect(within(screen.getByTestId("gateway-hop")).queryByTestId("gateway-trace")).toBeNull();
+      await click("gateway-trace-run");
+      const panel = await within(screen.getByTestId("gateway-hop")).findByTestId("gateway-trace", {}, T);
+      expect(panel).toHaveTextContent(/tools\/list/);
+      expect(panel).toHaveTextContent(/Refusal probe/);
+      expect(panel).toHaveTextContent(/inferred from the outcome/);
+      expect(panel).not.toHaveTextContent(/checked/i);
+      expect(checks()).toBe(1);
+      expect(hopCalls(gw)).toBe(calls);
+      expect(document.body.textContent).not.toContain(KEY);
+      await click("mode-select", "mock");
+      await waitFor(() => expect(screen.queryByTestId("gateway-hop")).toBeNull(), T);
+    } finally {
+      globalThis.fetch = patched;
+      for (const [k, v] of keep) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+      await new Promise((r) => gw.close(r));
+    }
   });
 });

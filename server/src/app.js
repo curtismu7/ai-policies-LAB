@@ -1,6 +1,6 @@
 // One Express app. /api = health, info, story, diagram, state, jwks, canonicalize and the action endpoints (evaluate, token, approval decisions, clock, policies,
 // reset). Server state per workspace id (X-Workspace) is one engine per vertical, so one visitor's Reset never touches another's.
-// Mock reads generated tables and refuses every write; Live drives the engine. Both are loopback-only with zero outbound calls.
+// Mock reads generated tables and refuses every write; Live drives the engine. Mock is loopback-only with zero outbound calls; Real adds only the optional gateway check (one door origin).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,9 @@ import { jwks } from './token.js';
 import { shown } from './engine.js';
 import { maskDeep, maskProse } from './mask.js';
 import { buildMethodTable, charsetProblem, isPageAddress, methodNotAllowed } from './shared/hygiene.js';
-import { readFileSettings, doorConfig, createRealDoor } from './gatewayReal.js';
+import { doorConfig, createRealDoor } from './gatewayReal.js';
+import { traceFromDoor } from './gatewayTrace.js';
+import { setAllowedOrigins } from './netguard.js';
 
 // Real mode = the shared gateway hop: an agent key from the shared settings file calling a live Privilege door.
 // The environment wins over the file: APL_* variables overlay the parsed file text.
@@ -33,7 +35,7 @@ export function realDoorFrom(env = process.env) {
   try { text = fs.readFileSync(p, 'utf8'); } catch { /* the environment may still carry the keys */ }
   for (const [k, v] of Object.entries(env)) if (k.startsWith('APL_GW_') && v) text += `\n${k}=${v}`;
   const cfg = doorConfig(text, 'APL');
-  return cfg.ok ? createRealDoor({ config: cfg, clientInfo: { name: 'ai-policies-lab', version: '0.1.0' } }) : null;
+  return cfg.ok ? createRealDoor({ config: cfg, capture: true, clientInfo: { name: 'ai-policies-lab', version: '0.1.0' } }) : null;
 }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -44,7 +46,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 // Every /api route the lab has and the methods it takes: ONE table, used for the 405 (with Allow) and nowhere else. ":name" matches one path segment; HEAD is allowed wherever
 // GET is. /api/health is not listed: its router answers its own 405. A path that is not in the table is a 404, never a 405.
 export const API_ROUTES = {
-  '/api/story': ['GET'], '/api/diagram': ['GET'], '/api/info': ['GET'], '/api/jwks': ['GET'], '/api/state': ['GET'], '/api/mode': ['POST'],
+  '/api/story': ['GET'], '/api/diagram': ['GET'], '/api/info': ['GET'], '/api/jwks': ['GET'], '/api/state': ['GET'], '/api/mode': ['POST'], '/api/gateway-check': ['POST'],
   '/api/canonicalize': ['POST'], '/api/evaluate': ['POST'], '/api/token': ['POST'], '/api/clock': ['POST'], '/api/reset': ['POST'],
   '/api/approvals/:ref/decision': ['POST'],
   '/api/policies/:layer': ['PUT'],
@@ -99,20 +101,28 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
     return res.json({ mode: current, source: toSource(current), realAvailable: true, realReason: null });
   });
 
-
-  // One real gateway check: tools/list through the door with the agent key, then the gateway's refusal
-  // for a tool nothing grants. Independent of the lab's local Live engine.
+  // One real gateway check: tools/list through the door with the agent key, then the gateway's refusal for a tool nothing grants.
+  // Real only: Mock makes no outbound call at all. Independent of the lab's local engine (that is what "Real" evaluates here).
   api.post('/gateway-check', async (req, res) => {
+    noStore(res);
+    if (current !== 'live') return res.status(409).json({ error: 'mock_mode', message: 'Mock never calls a gateway. Switch to Real to run the gateway check.' });
     const door = realDoorFrom();
-    if (!door) return res.status(409).json({ error: 'real_not_available', detail: 'Set APL_GW_URL, APL_GW_APPS and at least one APL_GW_KEY_<NAME> in the shared settings file.' });
+    if (!door) return res.status(409).json({ error: 'real_not_available', message: 'Set APL_GW_URL, APL_GW_APPS and at least one APL_GW_KEY_<NAME> in the shared settings file.' });
     if (req.body && Object.keys(req.body).some((k) => !['app', 'caller'].includes(k))) return res.status(400).json({ error: 'bad_request', detail: 'the only accepted body fields are { "app", "caller" }' });
     const app = String(req.body?.app || door.apps[0]);
     if (!door.apps.includes(app)) return res.status(400).json({ error: 'bad_app', detail: `app must be one of ${door.apps.join(', ')}` });
     const caller = req.body?.caller && door.callers.some((c) => c.id === req.body.caller) ? req.body.caller : door.callers[0].id;
-    const listing = await door.list(app, caller);
+    setAllowedOrigins([door.origin]); // the netguard lets the Real hop reach exactly this gateway origin and nothing else
+    const { wire: listWire, ...listing } = await door.list(app, caller);
     const out = { app, caller, gateway: door.origin, listing };
-    if (listing.ok) out.refusal = await door.call(app, caller, 'ai_policies_refusal_probe_tool', {});
-    res.json(out);
+    // "What Privilege did" (Rule 25): a Real trace is built from the hop's own capture, so every decision is observed or inferred, never checked.
+    const trace = { listing: traceFromDoor({ ...listing, wire: listWire }, { rpcMethod: 'tools/list' }) };
+    if (listing.ok) {
+      const { wire: probeWire, ...probe } = await door.call(app, caller, 'ai_policies_refusal_probe_tool', {});
+      out.refusal = probe;
+      trace.refusal = traceFromDoor({ ...probe, wire: probeWire }, { rpcMethod: 'tools/call' });
+    }
+    res.json({ ...out, trace });
   });
   api.get('/state', (req, res) => {
     const id = ws(req, res); if (!id) return;
