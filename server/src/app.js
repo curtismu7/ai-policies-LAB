@@ -15,7 +15,7 @@ import { InputError } from './errors.js';
 import { MOCK_TABLE } from './mockTable.js';
 import { shelfInfo } from './shelfLink.js';
 import { createWorkspaces, workspaceFrom } from './workspaces.js';
-import { liveState, mockState, runAction, scrub } from './service.js';
+import { liveState, mockState, runAction, scrubWhole } from './service.js';
 import { policyTrace } from './policyTrace.js';
 import { buildCatalog, hasApp, hasTool, parseRoute } from './catalog.js';
 import { callHash, METHODS, normalizeArguments } from './canon.js';
@@ -132,10 +132,10 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
         const common = { workspace: id, mode, vertical, hops: r.hops, hopsTruncated: r.hopsTruncated, traceId: r.traceId, state: r.state };
         // Honest status codes: an evaluation answers 200 (allow), 401 (a token that does not verify) or 403 (deny, hold, withhold), and says which in the body. A refusal by
         // the engine is its own 4xx. The browser logs each of those 4xx answers as a console message; the README says so.
-        // Rule 25: an evaluation is the one call to the (simulated) gateway, so it carries "What Privilege did". The request is shown scrubbed and without the token.
+        // Rule 25: an evaluation is the one call to the (simulated) gateway, so it carries "What Privilege did". The request is shown whole (masked, never cut) and without the token.
         if (r.outcome.ok && op === 'evaluate') {
           const { token, ...rest } = p;
-          return res.status(r.status).json({ ok: true, result: r.outcome.result, trace: policyTrace({ cast, request: scrub(rest), tokenNote: token === undefined ? null : 'lab token as sent', decision: r.outcome.result }), ...common });
+          return res.status(r.status).json({ ok: true, result: r.outcome.result, trace: policyTrace({ cast, request: scrubWhole(rest), tokenNote: token === undefined ? null : 'lab token as sent', decision: r.outcome.result }), ...common });
         }
         if (r.outcome.ok) return res.status(r.status).json({ ok: true, result: r.outcome.result, ...common });
         return res.status(r.outcome.status || 400).json({ ok: false, error: r.outcome.code, detail: r.outcome.detail, ...(r.outcome.errors ? { errors: r.outcome.errors } : {}), ...common });

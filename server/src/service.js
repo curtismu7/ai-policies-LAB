@@ -9,12 +9,17 @@ import { policyTrace } from './policyTrace.js';
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 // A copy of the visitor's parameters that is safe to show: strings cleaned and masked (a token is credential-shaped, so it shows as [masked:jwt]), nothing else changed. Iterative and depth-limited.
-export function scrub(value, depth = 0) {
-  if (typeof value === 'string') return cleanFree(value, 300);
-  if (Array.isArray(value)) return depth > 3 ? [] : value.slice(0, 10).map((v) => scrub(v, depth + 1));
-  if (isObj(value)) return depth > 3 ? {} : Object.fromEntries(Object.keys(value).slice(0, 20).map((k) => [cleanFree(k, 40), typeof value[k] === 'string' || typeof value[k] === 'number' || typeof value[k] === 'boolean' ? cleanUnderKey(k, value[k], 300) : scrub(value[k], depth + 1)]));
+// SHOWN is the cut the hop panes use. WHOLE is for the Rule 25 trace, which shows the exact request, never capped: no length, count or key cut (only a depth stop of 32,
+// far past the engine's own limit of 6, so a call the engine accepts is shown whole and hostile nesting cannot overflow the stack). Masking runs before any cut either way.
+const SHOWN = { text: 300, key: 40, items: 10, keys: 20, depth: 3 };
+const WHOLE = { text: Infinity, key: Infinity, items: Infinity, keys: Infinity, depth: 32 };
+export function scrub(value, depth = 0, cut = SHOWN) {
+  if (typeof value === 'string') return cleanFree(value, cut.text);
+  if (Array.isArray(value)) return depth > cut.depth ? [] : value.slice(0, cut.items).map((v) => scrub(v, depth + 1, cut));
+  if (isObj(value)) return depth > cut.depth ? {} : Object.fromEntries(Object.keys(value).slice(0, cut.keys).map((k) => [cleanFree(k, cut.key), typeof value[k] === 'string' || typeof value[k] === 'number' || typeof value[k] === 'boolean' ? cleanUnderKey(k, value[k], cut.text) : scrub(value[k], depth + 1, cut)]));
   return typeof value === 'number' || typeof value === 'boolean' || value === null ? value : undefined;
 }
+export const scrubWhole = (value) => scrub(value, 0, WHOLE);
 
 // "What Privilege did" for one Mock step: built here, at read time, from the step's call and the decision the lab's own engine recorded (the table is not regenerated).
 // Only an evaluation is a call to the gateway; the other ops (decide, advance, save a policy) are lab actions and get no trace.
