@@ -1,5 +1,5 @@
 // Deployment configuration. AIP_LAB_MODE is the DEFAULT mode the page opens in (mock or live); the header toggle can switch per visit.
-// Mock is the default. Both modes are loopback-only and make zero outbound calls. Anything else is an error, never a silent fallback.
+// Mock is the default. Mock is loopback-only and makes zero outbound calls; Real adds only the optional Privilege gateway check to the one door origin the settings name. Anything else is an error, never a silent fallback.
 // The one shared settings file (~/Development/.env, or STANDALONE_ENV) may carry AIP_LAB_MODE. A bare MODE is NOT read:
 // the shared file is read by every standalone app, and another app's MODE must not switch this one.
 export const MODES = ['mock', 'live'];

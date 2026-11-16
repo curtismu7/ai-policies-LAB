@@ -14,6 +14,7 @@ import useLab from "./hooks/useLab";
 import useEvaluator from "./hooks/useEvaluator";
 import { buildPresets } from "./presets";
 import { getJson, postJson, resetWorkspace } from "./api";
+import GatewayHop from "./components/GatewayHop";
 
 export const TABS = [
   { id: "evaluate", label: "Evaluate" },
@@ -25,8 +26,8 @@ export const TABS = [
   { id: "talk", label: "Talk track" },
 ];
 // The banner is never blank and never claims one mode before it knows: until the story answers it says both, honestly.
-const TAIL = "Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). Nothing here calls a real gateway, identity provider, chat tool or tenant.";
-export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (loopback only, no outbound network). ${TAIL}`;
+const TAIL = "Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). No identity provider, chat tool or tenant is called; the only real call is the optional Privilege gateway card, in Real.";
+export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (Mock is loopback only with no outbound network). ${TAIL}`;
 const PRESENTER_TALK = { evaluate: ["say-first", "two-controls", "four-layers"], policies: ["four-layers"], approvals: ["hold", "bound", "period"], where: ["where", "hard"], closed: ["closed"], diagram: ["why-ai-policies"] };
 
 const THEME_KEY = "aip.theme";
@@ -158,6 +159,7 @@ export default function App() {
         </div>
       </header>
       <main>
+        {mode === "live" && <GatewayHop />}
         <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
         <div role="tablist" aria-label="Lab sections" className="tabs" ref={tabsRef}>
           {TABS.map((t, i) => (

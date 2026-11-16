@@ -7,7 +7,7 @@ export const INTRO = 'Once an agent can act rather than answer, authorization th
 
 export const BANNER = {
   mock: `SIMULATED, MOCK mode: tables generated from the lab's own evaluation engine and read-only. Every product claim is a ${CLAIM_LABEL} (release ${RELEASE}). No real gateway, identity provider, chat tool, ticket system or tenant is touched, and the rule formats, claim names and the canonical hash are the lab's own.`,
-  live: `SIMULATED, LIVE mode: the lab's own local engine evaluates your calls against real RS256 tokens you mint here (a throwaway key, loopback only, zero outbound network). Every product claim is a ${CLAIM_LABEL} (release ${RELEASE}). No real gateway, identity provider, chat tool, ticket system or tenant is touched.`,
+  live: `SIMULATED, LIVE mode: the lab's own local engine evaluates your calls against real RS256 tokens you mint here (a throwaway key, loopback only). Every product claim is a ${CLAIM_LABEL} (release ${RELEASE}). The one real call is the Privilege gateway card: when it runs, the lab makes one tools/list and one refusal probe through the gateway you set in the shared settings file (APL_GW_*), and nothing else leaves this machine. No real identity provider, chat tool, ticket system or tenant is touched.`,
 };
 
 export const CLAIMS = [

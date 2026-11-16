@@ -20,5 +20,5 @@ if (!allPassed(checks)) {
 const mode = modeFrom(process.env); // refuses anything but mock or live
 const host = assertBindAllowed(bindHost(), process.env);
 const { url } = await startHttpServer({ port, host, app: createApp({ allowedHosts, port }) });
-console.log(`[ai-policies-lab] simulated lab at ${url} (opens in ${mode} mode; loopback, no outbound network)`);
+console.log(`[ai-policies-lab] simulated lab at ${url} (opens in ${mode} mode; loopback; Mock has no outbound network, Real adds only the optional Privilege gateway check)`);
 console.log(`[ai-policies-lab] health: ${url}api/health`);

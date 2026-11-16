@@ -10,7 +10,7 @@
       "composeFile": "ai-policies-LAB/docker-compose.yml",
       "composeOverlays": [],
       "catalogId": "D109",
-      "notes": "Host-run: ./scripts/run.sh (port 7500). Docker: HOST_PORT=7500 docker compose up --build -d (published on 127.0.0.1 only). Mock and Live are both loopback-only with zero outbound calls; the lab holds no credential for any real system."
+      "notes": "Host-run: ./scripts/run.sh (port 7500). Docker: HOST_PORT=7500 docker compose up --build -d (published on 127.0.0.1 only). Mock is loopback-only with zero outbound calls; Real adds one optional Privilege gateway check to the origin you configure (APL_GW_*), and the lab holds no credential for any real system unless you set an agent key."
     }
   ]
 }

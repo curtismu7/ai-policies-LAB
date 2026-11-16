@@ -108,3 +108,9 @@ summary { cursor: pointer; font-weight: 700; font-size: 14px; }
 .preset { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .preset > span:first-child { min-width: 0; flex: 1 1 220px; }
 code { overflow-wrap: anywhere; }
+
+/* Real gateway hop: the shared card and its "What Privilege did" panel span the page like the tabs below (the vendored card caps itself at 46rem and takes its background from a token this app does not define, so it is set here for the dark theme). */
+.gwhop { margin: 12px 0; }
+.gwhop .pcard { max-width: none; margin: 0; background: var(--surface); }
+.gwhop__trace { margin-top: 12px; }
+.gwhop__panel { margin-top: 16px; }
