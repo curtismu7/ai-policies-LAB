@@ -45,7 +45,7 @@ beforeEach(async () => { cleanup(); forgetWorkspace(); seen = []; delay = () => 
 
 const T = { timeout: 20000 };
 const mount = async () => { render(<App />); await screen.findByTestId("scenario-four-layers", {}, T); };
-const tab = (name) => userEvent.click(screen.getByRole("tab", { name }));
+const tab = (name) => userEvent.click(within(screen.getByRole("navigation", { name: "Lab sections" })).getByRole("link", { name }));
 const click = (id, value) => (value === undefined ? userEvent.click(screen.getByTestId(id)) : userEvent.selectOptions(screen.getByTestId(id), value));
 const live = async () => { await click("mode-select", "real"); await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/)); await screen.findByTestId("run-hold", {}, T); };
 const pick = (id, value) => userEvent.selectOptions(screen.getByTestId(id), value);
@@ -66,13 +66,26 @@ const code = () => screen.getByTestId("decision-code").textContent;
 const settle = async () => { await waitFor(() => expect(pending).toBe(0), T); await new Promise((r) => setTimeout(r, 0)); };
 
 describe("shell", () => {
-  it("shows the banner with the mode, the seven tabs, and the Mock scenarios", async () => {
+  it("shows the shell bar, the banner with the mode, the seven section links, and the Mock scenarios", async () => {
     await mount();
     expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/); expect(screen.getByTestId("banner")).toHaveTextContent(/UNVERIFIED on our tenant/);
-    expect(screen.getByTestId("mode")).toHaveTextContent("Mode: mock");
+    expect(screen.getByTestId("mode")).toHaveTextContent(/^Mock$/);
     expect(TABS.map((t) => t.label)).toEqual(["Evaluate", "Policies", "Approvals", "Where it runs", "Fail closed", "Diagram", "Talk track"]);
-    for (const t of TABS) expect(screen.getByRole("tab", { name: t.label })).toBeInTheDocument();
+    const nav = within(screen.getByRole("navigation", { name: "Lab sections" }));
+    for (const t of TABS) expect(nav.getByRole("link", { name: t.label })).toBeInTheDocument();
+    expect(nav.getByRole("link", { name: "Evaluate" })).toHaveAttribute("aria-current", "page");
+    // Page order: the shell bar first (title, mode badge, section links, TopMenu), then main with the banner as its first child.
+    const bar = document.querySelector(".app").firstElementChild;
+    expect(bar).toBe(document.querySelector("header.shell-bar"));
+    expect(bar.querySelector("h1")).toHaveTextContent("AI Policies LAB");
+    expect(bar.contains(screen.getByTestId("mode"))).toBe(true);
+    expect(bar.contains(screen.getByTestId("top-menu"))).toBe(true);
+    expect(document.querySelector("main").firstElementChild).toBe(screen.getByTestId("banner"));
     expect(screen.getAllByTestId(/^scenario-(?!say)/)).toHaveLength(6);
+    await tab("Policies");
+    expect(nav.getByRole("link", { name: "Policies" })).toHaveAttribute("aria-current", "page");
+    expect(nav.getByRole("link", { name: "Evaluate" })).not.toHaveAttribute("aria-current");
+    expect(window.location.hash).toBe("#policies");
     expect(BANNER_UNKNOWN).toMatch(/UNVERIFIED/);
   });
   it("Mock steps through a scenario and shows the engine's decision and layer-by-layer trace", async () => {
@@ -104,7 +117,7 @@ describe("shell", () => {
   });
   it("Live switches the banner, keeps the mode chip in step, and Mock stays read-only", async () => {
     await mount(); await live();
-    expect(screen.getByTestId("mode")).toHaveTextContent("Mode: live");
+    expect(screen.getByTestId("mode")).toHaveTextContent(/^Live$/);
     await tab("Policies"); expect((await screen.findByTestId("save-users", {}, T))).toBeEnabled();
     await click("mode-select", "mock"); await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
     await waitFor(() => expect(screen.getByTestId("save-users")).toBeDisabled(), T);
@@ -218,7 +231,7 @@ describe("stale answers", () => {
     await mount(); await click("mode-select", "real"); await click("mode-select", "mock");
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
     await settle(); await new Promise((r) => setTimeout(r, 450));
-    expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/); expect(screen.getByTestId("mode")).toHaveTextContent("Mode: mock");
+    expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/); expect(screen.getByTestId("mode")).toHaveTextContent(/^Mock$/);
     expect(screen.getAllByTestId(/^scenario-(?!say)/).length).toBe(6);
   });
 });
@@ -231,12 +244,12 @@ describe("rule 19: server-backed mode", () => {
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/LIVE mode/), T);
     expect(seen.some((r) => r.url.endsWith("/api/mode") && r.body === JSON.stringify({ source: "real" }))).toBe(true);
     expect(seen.some((r) => r.url.includes("/api/state?"))).toBe(true);
-    expect(screen.getByTestId("mode")).toHaveTextContent("Mode: live");
+    expect(screen.getByTestId("mode")).toHaveTextContent(/^Live$/);
     seen.length = 0;
     await click("mode-select", "mock");
     await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
     expect(seen.some((r) => r.url.endsWith("/api/mode") && r.body === JSON.stringify({ source: "mock" }))).toBe(true);
-    expect(screen.getByTestId("mode")).toHaveTextContent("Mode: mock");
+    expect(screen.getByTestId("mode")).toHaveTextContent(/^Mock$/);
   });
   it("the mode the server holds survives a reload, and a bad body is refused 400", async () => {
     await mount();
