@@ -120,3 +120,40 @@ test('a visitor who types a key called hash, callHash, traceId or traceparent ge
   assert.equal(maskDeep({ traceId: 'a1'.repeat(16) }).traceId, 'a1'.repeat(16));
   assert.notEqual(maskDeep({ hash: ['password', '=', h].join('') }).hash, ['password', '=', h].join(''));
 });
+
+// The Real "What Privilege did" trace shows the session id the hop shortened ("sess-123… (shortened)"). The exemption is ONE member: the mcp-session-id header of a trace
+// request or response (trace.listing|refusal.request|response.headers), with a value of at most 8 safe characters and the optional shortened mark. Nothing else gets a pass.
+test('the shortened Mcp-Session-Id of a trace header is shown; the same member anywhere else, or a longer or secret-shaped value in it, is masked', () => {
+  const SHORT = 'sess-123… (shortened)';
+  const trace = (headers) => ({ trace: { listing: { request: { headers }, response: { headers } }, refusal: { request: { headers }, response: { headers } } } });
+  const shown = maskDeep(trace({ 'Mcp-Session-Id': SHORT, 'mcp-session-id': 'abc123' }));
+  for (const name of ['listing', 'refusal']) for (const side of ['request', 'response']) {
+    assert.equal(shown.trace[name][side].headers['Mcp-Session-Id'], SHORT, `${name}.${side}`);
+    assert.equal(shown.trace[name][side].headers['mcp-session-id'], 'abc123', `${name}.${side} (8 characters or fewer, whole)`);
+  }
+  // A visitor-supplied or any other Mcp-Session-Id is still read as a credential name: top level, under state, in a request body, under trace.other, under a header of a hop list.
+  const where = {
+    top: { 'Mcp-Session-Id': SHORT },
+    state: { state: { 'Mcp-Session-Id': SHORT } },
+    body: { trace: { listing: { request: { body: { 'Mcp-Session-Id': SHORT } } } } },
+    other: { trace: { other: { request: { headers: { 'Mcp-Session-Id': SHORT } } } } },
+    deeperHeaders: { trace: { listing: { hops: [{ request: { headers: { 'Mcp-Session-Id': SHORT } } }] } } },
+    listingHeaders: { listing: { request: { headers: { 'Mcp-Session-Id': SHORT } } } },
+    sideless: { trace: { listing: { headers: { 'Mcp-Session-Id': SHORT } } } },
+    otherTrace: { trace: { checked: { request: { headers: { 'Mcp-Session-Id': SHORT } } } } },
+  };
+  for (const [name, v] of Object.entries(where)) assert.ok(!JSON.stringify(maskDeep(v)).includes(SHORT), `${name} is masked`);
+  // In the exempt member itself, anything that is not a short handle is masked: a full session id, an agent key, a bearer token, a JWT, a cookie, a key plus the shortened mark.
+  const key = ['fake', 'agent', 'key'].join('-') + 'Q'.repeat(24);
+  const bad = [SECRETS.jwt, SECRETS.github, `Bearer ${SECRETS.jwt}`, 'session=' + 'a1b2c3d4e5f6a7b8c9d0', 'sess-1234567890abcdef', key, `${key.slice(0, 8)}… (shortened)x`, `${key}… (shortened)`, 'password=' + ['hunter', '2xyz'].join(''), `${SHORT}\nCookie: x`];
+  for (const v of bad) {
+    const out = JSON.stringify(maskDeep(trace({ 'Mcp-Session-Id': v })));
+    assert.ok(!out.includes(v), `masked: ${v.slice(0, 20)}`);
+    assert.match(out, /\[masked:/);
+  }
+  // Authorization, Cookie and an API key header in the trace are masked as before; a header with another name gets no exemption for the shortened form.
+  for (const [h, v] of [['Authorization', `Bearer ${SECRETS.jwt}`], ['Cookie', 'session=' + 'a1b2c3d4e5f6a7b8c9d0'], ['x-api-key', SECRETS.github]]) {
+    assert.ok(!JSON.stringify(maskDeep(trace({ [h]: v }))).includes(v), h);
+  }
+  for (const h of ['session-id', 'Mcp-Session-Id-X', 'x-session-id']) assert.ok(!JSON.stringify(maskDeep(trace({ [h]: SHORT }))).includes(SHORT), h);
+});
