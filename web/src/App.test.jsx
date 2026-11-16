@@ -9,6 +9,7 @@ import { VERTICALS } from "../../server/src/cast.js";
 import App, { BANNER_UNKNOWN, TABS } from "./App";
 import { fitOptions, labelOffsets } from "./components/PatternDiagram";
 import { visible } from "./safeText";
+import { setJsonView } from "./components/JsonPane";
 import { forgetWorkspace, workspaceId } from "./workspace";
 import { buildPresets, tamper } from "./presets";
 
@@ -81,6 +82,22 @@ describe("shell", () => {
     await click("step-2"); expect(screen.getByTestId("step-result")).toHaveTextContent(/self_approval/);
     await click("step-8"); expect(screen.getByTestId("decision-code")).toHaveTextContent("approval_consumed");
   });
+  it("Rule 25: Mock shows What Privilege did for an evaluation step (request, response, every layer checked, a hold is info) and none for a non-gateway step", async () => {
+    setJsonView("raw"); await mount();
+    await click("scenario-hold-and-retry"); await waitFor(() => expect(screen.getByTestId("scenario-say")).toHaveTextContent(/refused at once/), T);
+    await click("step-0");
+    const panel = screen.getByTestId("gateway-trace");
+    expect(within(panel).getByTestId("gateway-trace-basis")).toHaveTextContent(/Simulated, in Mock and in Live/);
+    expect(within(panel).getByTestId("trace-1")).toBeInTheDocument();
+    expect(within(panel).getByTestId("trace-1-request-head")).toHaveTextContent(/POST https:\/\/gateway\.[a-z]+\.invalid\/mcp\//);
+    expect(within(panel).getByTestId("trace-1-response-body")).toHaveTextContent(/hold_for_approval/);
+    const layers = within(screen.getByTestId("trace-1-decisions")).getAllByRole("listitem");
+    expect(layers).toHaveLength(10);
+    expect(layers.filter((li) => li.getAttribute("data-outcome") === "info")).toHaveLength(1);
+    expect(panel).toHaveTextContent(/refused at|for information/);
+    await click("step-2"); // a person's decision on the approval: a lab action, not a call to the gateway
+    expect(screen.queryByTestId("gateway-trace")).toBeNull();
+  });
   it("Live switches the banner, keeps the mode chip in step, and Mock stays read-only", async () => {
     await mount(); await live();
     expect(screen.getByTestId("mode")).toHaveTextContent("Mode: live");
@@ -105,6 +122,17 @@ describe("Live flows", () => {
       await run(id); expect(code()).toBe(c);
     }
     await run("action"); expect(screen.getByTestId("ignored-hints")).toHaveTextContent(/header naming scope/);
+  });
+  it("Rule 25: Live shows What Privilege did after a run, with no token in it", async () => {
+    setJsonView("raw"); await mount(); await live();
+    await run("allowed");
+    const panel = await screen.findByTestId("gateway-trace", {}, T);
+    await waitFor(() => expect(within(panel).getByTestId("trace-1")).toBeInTheDocument(), T);
+    expect(within(panel).getByTestId("trace-1-decisions")).toHaveTextContent(/PASS/);
+    expect(within(panel).getByTestId("trace-1-request-head")).toHaveTextContent(/authorization: Bearer <.*not repeated here>/);
+    expect(panel.textContent).not.toMatch(/eyJ[\w-]{10,}\.[\w-]{10,}/);
+    await run("surface");
+    await waitFor(() => expect(within(screen.getByTestId("gateway-trace")).getByTestId("trace-1")).toHaveTextContent(/refused at: 1\. Surface scope/), T);
   });
   it("hold, a wrong approver, a weak sign-in, a right one, retry proceeds, replay refused, changed arguments need a new approval", async () => {
     await mount(); await live();

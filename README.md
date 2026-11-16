@@ -100,6 +100,8 @@ Other variables: `VITE_PORT` (Vite dev server, default 7501, `npm run dev -w web
 
 The header has a **Mock / Live** toggle on every page, and the banner and the mode chip show the same mode. Mock reads tables generated from the engine (six scripted scenarios per vertical; a scenario picker on the Evaluate tab) and is read-only: every write control is off and the API answers 409. Live drives this workspace's engine (one per vertical): it mints tokens, evaluates your calls, keeps the approvals, outbox, audit trail and lab clock, and lets you edit the policy.
 
+**What Privilege did (rule 25).** Under each evaluation on the Evaluate tab (a Mock step, or a Live run) the shared `GatewayTrace` panel shows the call this lab's gateway read, the decision it answered, and what each of the ten layers decided. Both modes run the lab's own in-process engine, so every decision is marked "checked" (the engine computed it) and the trace is labelled simulated; no real Privilege gateway is called here. A hold shows as information, never as passed. The token is never repeated in the panel. The panel files are copied unchanged from the family's `shared/gateway-trace` and pinned by `web/src/gateway-trace/gateway-trace.sha256`; this lab's own builder is `server/src/policyTrace.js`.
+
 ## Health, doctor and reset
 
 ```
@@ -125,7 +127,7 @@ npm test    # server (node --test), web (vitest, drives the UI against the real 
 
 The shared checks are run by hand, because the scripts are not shipped into this repo's CI: `bash <AI-DEMO-Standalone>/scripts/check-drift.sh .`, `bash <AI-DEMO-Standalone>/scripts/check-css.sh .` and `node <demo-kit-base>/scripts/conformance.mjs . --new`.
 
-On Node 26: 331 tests pass (287 server, 21 web, 23 scripts).
+On Node 26: 363 tests pass (296 server, 40 web, 27 scripts).
 
 ## Troubleshooting
 

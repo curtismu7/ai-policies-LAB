@@ -2,7 +2,12 @@ import { useMemo } from "react";
 import { visible } from "../safeText";
 import { ClaimTag, Json, SourceTag } from "./Bits";
 import Decision from "./Decision";
+import GatewayTrace from "../gateway-trace/GatewayTrace";
 import { buildPresets, tamper } from "../presets";
+
+// Mock and Live both run this lab's own simulated gateway (Live's "Real" is the local engine, not Privilege), so the panel's default wording about Real mode would be wrong.
+const BASIS = "Simulated, in Mock and in Live: this lab's own in-process gateway engine ran the ten layers in order, so every decision here is what it computed (checked). No real Privilege gateway is called by this lab, and nothing leaves this machine.";
+const Trace = ({ trace }) => <GatewayTrace source="mock" basisNote={BASIS} exchanges={trace ? [{ step: 1, title: "Agent calls the gateway", status: trace.response?.status ?? null, trace }] : []} />;
 
 const FAULTS = ["", "request", "token", "surface", "application", "action", "end-user", "attended-unattended", "request-inspection", "call", "reply-inspection"];
 
@@ -37,6 +42,7 @@ function MockScenarios({ story, lab, scenarioId, setScenarioId, step, setStep })
         </section>
       ) : null}
       {asDecision ? <Decision decision={{ result: asDecision, http: asDecision.http }} caption={`Step ${step + 1}`} /> : null}
+      {asDecision ? <Trace trace={s.trace} /> : null}
     </div>
   );
 }
@@ -109,6 +115,7 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
         </div>
       )}
       <Decision decision={ev.decision} />
+      <Trace trace={ev.decision?.trace} />
     </div>
   );
 }
