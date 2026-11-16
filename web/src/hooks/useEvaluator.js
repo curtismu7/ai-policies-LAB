@@ -9,7 +9,7 @@ const parse = (text, what) => {
 // The request builder's state and its two actions (mint a token, evaluate), shared by the tabs that can run a call. Lab state stays on the server.
 export default function useEvaluator(lab) {
   const [form, setForm] = useState(null);
-  const [decision, setDecision] = useState(null); // { http, result, hops, traceId } of the last evaluation
+  const [decision, setDecision] = useState(null); // { http, result, hops, traceId, trace } of the last evaluation
   const [formError, setFormError] = useState("");
   const [minted, setMinted] = useState(null);
 
@@ -35,7 +35,7 @@ export default function useEvaluator(lab) {
     if (f.simulatedReply) request.simulatedReply = f.simulatedReply;
     if (f.labFault) request.labFault = f.labFault;
     const r = await lab.act("POST", "/api/evaluate", { request });
-    if (r.ok) setDecision({ http: r.status, result: r.body.result, hops: r.body.hops, traceId: r.body.traceId });
+    if (r.ok) setDecision({ http: r.status, result: r.body.result, hops: r.body.hops, traceId: r.body.traceId, trace: r.body.trace });
     else setFormError(`the call was not evaluated: ${r.body?.error || "refused"}`);
     return r;
   }, [lab.act]); // eslint-disable-line react-hooks/exhaustive-deps

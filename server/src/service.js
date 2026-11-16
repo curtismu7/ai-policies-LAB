@@ -4,6 +4,7 @@ import { Engine } from './engine.js';
 import { perform } from './actions.js';
 import { cleanFree, cleanUnderKey } from './credentials.js';
 import { newTrace, formatTraceparent } from './trace.js';
+import { policyTrace } from './policyTrace.js';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -15,10 +16,14 @@ export function scrub(value, depth = 0) {
   return typeof value === 'number' || typeof value === 'boolean' || value === null ? value : undefined;
 }
 
-export function mockState(table, vertical, scenarioId) {
+// "What Privilege did" for one Mock step: built here, at read time, from the step's call and the decision the lab's own engine recorded (the table is not regenerated).
+// Only an evaluation is a call to the gateway; the other ops (decide, advance, save a policy) are lab actions and get no trace.
+const withTrace = (cast) => (s) => (s.op === 'evaluate' && s.result?.trace ? { ...s, trace: policyTrace({ cast, request: s.request, tokenNote: s.claims ? `lab-minted RS256 token${s.tampered ? ', one character changed after signing' : ''}` : null, decision: s.result }) } : s);
+
+export function mockState(table, vertical, scenarioId, cast) {
   const v = table.verticals[vertical];
   const sc = (typeof scenarioId === 'string' && v.scenarios.find((s) => s.id === scenarioId)) || v.scenarios[0];
-  return { state: sc.state, scenario: { id: sc.id, title: sc.title, say: sc.say, steps: sc.steps }, scenarios: v.scenarios.map((s) => ({ id: s.id, title: s.title, say: s.say })), canonicalExamples: v.canonicalExamples };
+  return { state: sc.state, scenario: { id: sc.id, title: sc.title, say: sc.say, steps: cast ? sc.steps.map(withTrace(cast)) : sc.steps }, scenarios: v.scenarios.map((s) => ({ id: s.id, title: s.title, say: s.say })), canonicalExamples: v.canonicalExamples };
 }
 
 export function liveState(ws, workspaces, vertical, cast) {
