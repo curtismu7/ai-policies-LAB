@@ -92,6 +92,8 @@ test('Real: one check returns a real trace for tools/list and for the refusal pr
         assert.equal(t.request.url, `${gw.origin}/door-a/mcp`);
         assert.ok(t.decisions.length > 0 && t.decisions.every((d) => d.basis === 'observed' || d.basis === 'inferred'), 'a real decision is never "checked"');
         assert.match(t.request.headers.authorization || t.request.headers.Authorization, /^Bearer <agent key, \d+ characters, kept on the server>$/);
+        // The session id the gateway issued is a connection handle, shown shortened by the hop ("sess-123… (shortened)"); the response mask must leave exactly that.
+        assert.equal(t.request.headers['Mcp-Session-Id'], 'sess-123… (shortened)', `${name}: the shortened session id survives the answer mask`);
       }
       assert.equal(b.trace.listing.response.status, 200);
       assert.equal(b.trace.refusal.response.status, 403);

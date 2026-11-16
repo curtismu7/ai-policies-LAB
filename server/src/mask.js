@@ -18,7 +18,14 @@ const OPAQUE_SHAPE = {
   traceparent: (v) => typeof v === 'string' && /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/.test(v),
   labtoken: (v, path) => path === 'result.labToken' && typeof v === 'string' && v.length <= 4096 && /^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(v),
 };
-const opaque = (key, path, value) => OPAQUE_SHAPE[String(key).toLowerCase()]?.(value, path) === true;
+// The Real "What Privilege did" trace shows the session id the gateway issued, shortened by the hop (gatewayReal.js: the first 8 characters and "… (shortened)"). The masker reads
+// the header name Mcp-Session-Id as a credential name, so it would mask that line. ONE member is left alone: the mcp-session-id header of a trace request or response
+// (trace.listing|refusal.request|response.headers), and only a value of at most 8 characters of [A-Za-z0-9._-], optionally followed by the shortened mark. A full session id, an
+// agent key, a bearer token or a JWT does not fit that shape and stays masked; so does the same header name anywhere else (a visitor's field, state, a request body, trace.other).
+const SHOWN_SESSION_PATH = /^trace\.(?:listing|refusal)\.(?:request|response)\.headers\.mcp-session-id$/i;
+const SHOWN_SESSION_VALUE = /^[A-Za-z0-9._-]{1,8}(?:… \(shortened\))?$/;
+const shownSession = (path, value) => typeof value === 'string' && SHOWN_SESSION_PATH.test(path) && SHOWN_SESSION_VALUE.test(value);
+const opaque = (key, path, value) => OPAQUE_SHAPE[String(key).toLowerCase()]?.(value, path) === true || shownSession(path, value);
 // The default bounds (20,000 nodes, 1,000,000 characters per answer) are for unknown input. The lab's own answers are bounded by the lab (a workspace holds at most 500 audit
 // entries and 200 approvals; the Mock table is about 460 kB), so the bounds are raised to what those caps can fill, and an answer that still passes them is cut with a mark.
 const BOUNDS = { maxNodes: 400000, maxTotalChars: 4000000 };
