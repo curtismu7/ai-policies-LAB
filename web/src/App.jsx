@@ -14,6 +14,7 @@ import useLab from "./hooks/useLab";
 import useEvaluator from "./hooks/useEvaluator";
 import { buildPresets } from "./presets";
 import { getJson, postJson, resetWorkspace } from "./api";
+import PrivilegeCheck from "./privilege-check/PrivilegeCheck.jsx";
 
 export const TABS = [
   { id: "evaluate", label: "Evaluate" },
@@ -158,6 +159,8 @@ export default function App() {
         </div>
       </header>
       <main>
+
+        <PrivilegeCheck />
         <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
         <div role="tablist" aria-label="Lab sections" className="tabs" ref={tabsRef}>
           {TABS.map((t, i) => (

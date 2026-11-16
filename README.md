@@ -153,3 +153,26 @@ Mutation testing (a hand-run list, not part of CI): 75 changes to the masking, c
 ## Not done
 
 No SE k8s build (deferred by the owner, 2026-10-31). Every product claim stays UNVERIFIED until it is measured on a tenant that has the release. Cedar is not evaluated; the Intent, Purpose and Behaviour signals, AIGuard content inspection and real notification delivery are not modelled (the lab's three finding kinds are a deliberately tiny stand-in).
+
+---
+
+## Real mode: through the PingOne Privilege gateway
+
+Real mode here is one live call through a PingOne Privilege gateway
+(the origin you set in `APL_GW_URL`, for example `https://<gateway-host>`) with an agent access key from the shared settings
+file (`~/Development/.env`, or the file `STANDALONE_ENV` names).
+
+**Privilege objects this lab uses:**
+
+| Object | Value |
+|---|---|
+| Gateway | the origin in `APL_GW_URL` (a PingOne Privilege gateway you can reach) |
+| Agentic App | one named in `APL_GW_APPS`, client path `/<app>/mcp` |
+| Caller | an agent access key `APL_GW_KEY_<NAME>` (write-only, never shown) |
+| Backend | whatever MCP members the Agentic App aggregates |
+
+**What runs in Real:** the **Privilege gateway check** (`POST /api/gateway-check`, card on the
+page): one live `tools/list` through the Agentic App with the key, then one `tools/call` probe of a
+tool no policy grants, so you see the gateway's own refusal shape. The gateway's words come
+back unaltered (keys scrubbed). Settings keys: `APL_GW_URL`, `APL_GW_APPS`,
+`APL_GW_KEY_<NAME>` (optional `APL_GW_VERSION`).
