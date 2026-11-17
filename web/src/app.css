@@ -109,13 +109,48 @@ summary { cursor: pointer; font-weight: 700; font-size: 14px; }
 .last { margin-top: 12px; }
 .tag { margin: 2px 4px 2px 0; }
 
-.trace { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
-.trace__step { border: 1px solid var(--border); border-left-width: 6px; border-radius: 8px; padding: 6px 10px; background: var(--surface); min-width: 0; }
-.trace__step[data-state="ok"] { border-left-color: var(--status-ok); }
-.trace__step[data-state="bad"] { border-left-color: var(--danger-text); }
-.trace__step[data-state="none"] { border-left-color: var(--muted); }
-.trace__head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.trace__reason { margin: 4px 0 0; font-size: 13px; line-height: 1.45; }
+/* The answer first (Evaluate): a full border and a tinted ground carry the state, with the outcome word and a drawn mark; no colour-only cue and no side stripe. */
+.verdict { margin: 8px 0 12px; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.verdict[data-state="ok"] { border-color: var(--status-ok); }
+.verdict[data-state="warn"] { border-color: var(--status-warn); }
+.verdict[data-state="bad"] { border-color: var(--danger-text); background: var(--accent-soft); }
+.verdict__head { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; font-weight: 700; line-height: 1.25; color: var(--text); }
+.verdict[data-state="ok"] .mark { color: var(--status-ok); }
+.verdict[data-state="warn"] .mark { color: var(--status-warn); }
+.verdict[data-state="bad"] .mark { color: var(--danger-text); }
+.verdict__why, .verdict__next { margin: 8px 0 0; max-width: 72ch; font-size: 15px; line-height: 1.5; color: var(--text); }
+.verdict__code { margin: 8px 0 0; }
+.mark { flex: none; }
+
+/* The checklist: one compact line per layer. The whole line is the disclosure (summary), so Enter and Space open the Detail. */
+.checks { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.checks--inner { margin: 0; padding: 0 8px 8px; }
+.check { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); min-width: 0; }
+.check details { margin: 0; }
+.check summary { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding: 6px 10px; min-height: 36px; font-size: 14px; font-weight: 500; list-style: none; }
+.check summary::-webkit-details-marker { display: none; }
+.check__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.check__word { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+.check__code { display: inline-block; margin-right: 8px; font-size: 12px; color: var(--muted); }
+.check--group .check__name { flex: 1 1 8ch; }
+.check__more { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); }
+.check__chev { transition: transform 120ms ease-out; }
+.check details[open] > summary .check__chev { transform: rotate(90deg); }
+.check__why { flex-basis: 100%; font-size: 13px; font-weight: 400; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+.check__body { padding: 0 10px 10px; }
+.check__src, .check__reason { margin: 4px 0; font-size: 13px; line-height: 1.5; }
+.check[data-state="ok"] .mark, .check[data-state="ok"] .check__word { color: var(--status-ok); }
+.check[data-state="warn"] .mark, .check[data-state="warn"] .check__word { color: var(--status-warn); }
+.check[data-state="bad"] .mark, .check[data-state="bad"] .check__word { color: var(--danger-text); }
+.check[data-state="none"] .mark, .check[data-state="none"] .check__word, .check[data-state="none"] .check__name { color: var(--muted); }
+.check[data-state="none"] { background: transparent; }
+.check[data-stop="true"] { border-width: 2px; background: var(--surface-2); }
+.check[data-stop="true"][data-state="bad"] { border-color: var(--danger-text); background: var(--accent-soft); }
+.check[data-stop="true"][data-state="warn"] { border-color: var(--status-warn); }
+.check[data-stop="true"] summary { padding: 8px 10px; }
+.check[data-stop="true"] .check__name { font-size: 15px; font-weight: 700; color: var(--text); }
+.check[data-stop="true"] .check__word { font-size: 13px; }
+.check summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
 .steps { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .steps button { text-align: left; width: 100%; }
 .preset { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
