@@ -326,7 +326,7 @@ describe("the Evaluate tab answers first, in Mock and in Live", () => {
     await run("action");
     expect(screen.getByTestId("verdict-headline")).toHaveTextContent(/^Denied at Action scope$/);
     expect(within(screen.getByTestId("trace-action")).getByTestId("source-tag")).toHaveTextContent("deck claim");
-    expect(screen.getByTestId("trace-action").querySelector("summary")).toHaveTextContent(/scope_missing/);
+    expect(screen.getByTestId("trace-action").querySelector(".check__body")).toHaveTextContent(/scope_missing/); // the code lives in the stopping layer's Detail, not on its row
     await run("hold");
     expect(screen.getByTestId("verdict-headline")).toHaveTextContent(/^Held at Attended and unattended$/);
     await run("allowed");

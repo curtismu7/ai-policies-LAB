@@ -12,9 +12,31 @@ export const STAGE_NAME = {
   "attended-unattended": "Attended and unattended", "request-inspection": "Request inspection", call: "The call is made (simulated upstream)", "reply-inspection": "Reply inspection",
 };
 
+// One sentence per layer on what it is for, in the lab's own words and true to what the lab computes (server/src/engine.js). Shown in the banner (for the
+// layer that stopped the call) and in every layer's Detail: the engine's jargon names a layer, this says what it does.
+export const STAGE_GLOSS = {
+  request: "Reading the call checks that a tool is named and that the arguments are one valid JSON object within the lab's limits.",
+  token: "Token verification checks that the token is genuine (RS256 signature), from this lab's issuer, meant for this gateway and within its time limits.",
+  surface: "Surface scope checks that the kind of call (model, tool or agent) is one that both the key and the identity that owns it allow.",
+  application: "Application policy checks that this identity may reach this application and that the token carries the claims the application requires.",
+  action: "Action scope checks that the tool exists, that its arguments fit, and that the token carries the scope this tool requires.",
+  "end-user": "End-user scope checks that the person the agent acts for is one the rules permit for this tool.",
+  "attended-unattended": "Attended and unattended checks whether a rule refuses the call outright or holds it until a person approves it.",
+  "request-inspection": "Request inspection looks in the arguments for content that a rule says to refuse, such as a card number.",
+  call: "The call is made to a simulated upstream: nothing leaves the lab.",
+  "reply-inspection": "Reply inspection looks in the reply for content that a rule says to withhold. The call has already been made by then.",
+};
+
+// A scope is a word the reader may not know; said once wherever the text names one.
+const SCOPE_GLOSS = "A scope is a permission written into the token.";
+// Where a scope is added in Live: the Evaluate form's Token panel (EvaluateTab.jsx: the Claims box, then Mint token).
+const SCOPE_WHERE = 'In Live, add it to the "scope" value in the Claims box of the Token panel, press Mint token, then Evaluate.';
+
 const safe = (v) => visible(String(v)).slice(0, 80);
 const names = (a) => (Array.isArray(a) && a.length ? a.map(safe).join(", ") : "none");
 const has = (a) => Array.isArray(a) && a.length > 0;
+// a hold that needs more than one approver (the count is the approval record's own)
+const many = (d) => Number.isInteger(d?.approval?.approvers) && d.approval.approvers > 1;
 const E = (why, next, facts) => ({ why, next, ...(facts ? { facts } : {}) });
 const REAPPROVE = "Call again without the reference to open a new request.";
 
@@ -72,9 +94,16 @@ export const VERDICT_TEXT = {
   argument_missing: E("The call leaves out an argument that is required.", "Add the missing argument to the call."),
   argument_type: E("An argument has the wrong type, and an argument of the wrong type is a denial.", "Send the argument with the type it needs.",
     (t) => (t?.detail?.argument ? `Argument ${safe(t.detail.argument)} must be a ${safe(t.detail.expected)}.` : "")),
-  "claim_type@action": E("The token's scope claim has the wrong type. It must be one string of space-separated scopes, and a claim of the wrong type is a denial.", "Mint the token with scope as one string, for example \"a:read b:write\"."),
-  scope_missing: E("The token does not carry the scope this tool needs. Scopes are read from the verified token only, never from a header or argument the caller sends.", "Add that scope to the token, or call a tool the token's scopes cover.",
-    (t) => (has(t?.detail?.lacking) ? `This tool needs: ${names(t.detail.lacking)}. The token carries: ${names(t.detail.tokenScopes)}.` : "")),
+  "claim_type@action": E(`The token's scope claim has the wrong type. It must be one string of space-separated scopes, and a claim of the wrong type is a denial. ${SCOPE_GLOSS}`, "Mint the token with scope as one string, for example \"a:read b:write\"."),
+  scope_missing: E("The token does not carry the scope this tool needs. Scopes are read from the verified token only, never from a header or argument the caller sends.", `Add that scope to the token, or call a tool the token's scopes cover. ${SCOPE_WHERE}`,
+    (t) => {
+      const d = t?.detail; if (!d) return "";
+      // what the tool needs is detail.required (every scope its rules name); lacking is only the part the token does not hold
+      const need = has(d.required) ? d.required : d.lacking;
+      if (!has(need)) return "";
+      const missing = has(d.lacking) && has(d.required) && d.lacking.length < d.required.length ? ` Missing: ${names(d.lacking)}.` : "";
+      return `This tool needs: ${names(need)}. The token carries: ${names(d.tokenScopes)}.${missing} ${SCOPE_GLOSS}`;
+    }),
 
   // End-user scope
   "claim_type@end-user": E("The token's end_user claim has the wrong type. It must be text, and a claim of the wrong type is a denial.", "Mint the token with end_user as the person's name."),
@@ -85,9 +114,10 @@ export const VERDICT_TEXT = {
   // Attended and unattended: hard denial, hold, and the approval problems
   "argument_missing@attended-unattended": E("A hold rule reads an argument that the call does not carry, so the lab cannot tell whether the rule applies, and it denies.", "Include that argument in the call."),
   "argument_type@attended-unattended": E("A hold rule compares an argument of the wrong type, so the lab denies.", "Send that argument with the type the rule compares."),
-  attended_refused: E("A rule refuses this call outright, even when a person is there to approve. This is a hard denial: no approval can lift it.", "Nothing the caller sends changes this, and an approval for another call does not help. Change the rule on the Policies tab, or call something else."),
+  attended_refused: E("A rule refuses this call outright, even when a person is there to approve. This is a hard denial: no approval can lift it.", "No. Nothing the caller sends changes this, and an approval for another call does not help. Only a change to the rule does (Policies tab), or call something else."),
   hold_without_approval: E("A rule asks for this call to be held but names no approval, so nobody could ever lift the hold. A hold that nobody can lift is a denial.", "Add an approval to that rule on the Policies tab."),
-  hold_for_approval: E("A rule asks for a person to approve this call before it goes ahead. Nothing is kept waiting: the call was refused now, with a reference and an expiry.", "Have an approver sign the request on the Approvals tab, then make the same call again."),
+  hold_for_approval: E("A rule asks for a person to approve this call before it goes ahead. Nothing is kept waiting: the call was refused now, with a reference and an expiry.", "Have an approver sign the request on the Approvals tab, then make the same call again.",
+    (t, d) => (many(d) ? `It needs ${d.approval.approvers} approvers, not one.` : "")),
   approval_unknown: E("The approval reference is not one this workspace issued.", "Use a reference from a hold in this workspace (like apr-0001), or call without one."),
   approval_other_requester: E("The approval was given for a different person.", REAPPROVE),
   approval_other_call: E("The approval was given for a different tool or a different call. An approval for one exact call does not cover changed arguments.", REAPPROVE),
@@ -107,6 +137,18 @@ export const VERDICT_TEXT = {
   reply_withheld: E("The call was made, but a finding in the reply matches an inspection rule, so the result was not released.", "Change the inspection rule on the Policies tab, or make a call whose reply does not carry that finding.",
     (t) => (has(t?.detail?.findings) ? `Finding: ${names(t.detail.findings)}.` : "")),
 };
+
+const NEXT_LABEL = { allow: "Next", hold: "What happens next", deny: "What would make it pass", withhold: "What would release the result" };
+
+// The next step for a hold. One approver: unchanged. More: say how many people it takes, and how many are still missing if some have signed.
+function holdNext(d) {
+  const ref = d?.approval?.ref || "the request";
+  if (!many(d)) return `Have an approver sign ${ref} on the Approvals tab, then make the same call again.`;
+  const n = d.approval.approvers; const done = Number.isInteger(d.approval.signatures) ? Math.max(0, d.approval.signatures) : 0;
+  if (done === 0) return `This needs ${n} approvers: have an approver sign ${ref} on the Approvals tab, then ${n === 2 ? "a second, different approver" : `${n - 1} more different approvers`} must sign it too. Then make the same call again.`;
+  const left = Math.max(1, n - done);
+  return `This needs ${n} approvers and has ${done} of ${n} signatures so far: ${left === 1 ? "one more, different approver" : `${left} more different approvers`} must sign ${ref} on the Approvals tab. Then make the same call again.`;
+}
 
 const WORD = { allow: "Allowed", hold: "Held", deny: "Denied", withhold: "Result withheld" };
 const KIND = { allow: "allowed", hold: "held", deny: "denied", withhold: "withheld" };
@@ -128,13 +170,15 @@ export function verdictFor(d, { mock = false } = {}) {
   const layer = (stage && STAGE_NAME[stage]) || (t?.title ? String(t.title).replace(/^\d+\.\s*/, "") : stage || "an unknown layer");
   const code = d?.code || "";
   const entry = VERDICT_TEXT[`${code}@${stage}`] || VERDICT_TEXT[code] || null;
+  const hardStop = code === "attended_refused"; // no input from the caller can change it, so "what would make it pass" would mislead
   const headline = outcome === "allow" ? WORD.allow : `${WORD[outcome]} ${WHERE[stage] || `at ${layer}`}`;
   let why = entry ? entry.why : `The lab stopped this call at ${layer}, and it has no plain-language note for this code yet. The engine's own message is in the line for that layer below.`;
   const facts = entry?.facts ? entry.facts(t, d) : "";
   if (facts) why = `${why} ${facts}`;
   let next = entry ? entry.next : "Read the engine's message below, then change the call, the token or the policy it names.";
-  if (code === "hold_for_approval") next = `Have an approver sign ${d?.approval?.ref || "the request"} on the Approvals tab, then make the same call again.`;
-  if (mock && (outcome === "deny" || outcome === "withhold")) next = `${MOCK_FIX} ${next}`;
+  if (code === "hold_for_approval") next = holdNext(d);
+  if (mock && (outcome === "deny" || outcome === "withhold")) next = hardStop ? `${next} Mock is read-only, so the rule can only be changed in Live.` : `${MOCK_FIX} ${next}`;
   if (d?.failedClosed && code !== "evaluation_error") why = `${why} The lab failed closed here.`;
-  return { kind: KIND[outcome], headline, why, next, code, stage, layer, outcome };
+  const gloss = outcome === "allow" ? "" : STAGE_GLOSS[stage] || "";
+  return { kind: KIND[outcome], headline, why, next, nextLabel: hardStop ? "Can the caller fix it?" : NEXT_LABEL[outcome], gloss, code, stage, layer, outcome };
 }
