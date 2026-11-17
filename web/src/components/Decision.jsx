@@ -1,7 +1,7 @@
 import { visible } from "../safeText";
 import { ClaimTag, Json, SourceTag, StatusTag } from "./Bits";
 import { SOURCE_NOTE, STAGE_SOURCE } from "../sources";
-import { STAGE_NAME, notCheckedBecause, verdictFor } from "../verdictText";
+import { STAGE_GLOSS, STAGE_NAME, notCheckedBecause, verdictFor } from "../verdictText";
 
 // How each layer's verdict reads on its one line. The mark is drawn (not a glyph) and always sits beside a word, so the outcome never rests on colour.
 const WORD = { pass: "Passed", deny: "Denied", hold: "Held", refuse: "Refused", withhold: "Withheld", "not-reached": "Not checked" };
@@ -9,7 +9,6 @@ const STATE = { pass: "ok", hold: "warn", "not-reached": "none" }; // anything e
 const stateOf = (v) => STATE[v] || "bad";
 const STOPS = new Set(["deny", "hold", "refuse", "withhold"]);
 const KIND_STATE = { allow: "ok", hold: "warn", deny: "bad", withhold: "bad" };
-const NEXT_LABEL = { allow: "Next", hold: "What happens next", deny: "What would make it pass", withhold: "What would release the result" };
 
 // A drawn mark per verdict: a tick, a cross, a pause, a bar for the result held back, a dash for not checked.
 function Mark({ v, big }) {
@@ -21,9 +20,9 @@ function Mark({ v, big }) {
 }
 const Chevron = () => <svg className="check__chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M6 3.5l4.5 4.5L6 12.5" /></svg>;
 
-// One layer, one compact line: mark, name, outcome word. The line that stopped the call also shows its code and the engine's own short reason (stronger edge,
-// heavier weight). Everything else is in the Detail: where the layer comes from (the source tag), what the engine said, and the decoded detail.
-function Layer({ t, stop }) {
+// One layer, one compact line: mark, name, outcome word and Detail, nothing else (the banner already says why). Everything else is in the Detail: what the
+// layer is for, for the layer that stopped the call the engine's code and its own reason, where the layer comes from (the source tag), and the decoded detail.
+function Layer({ t, stop, code }) {
   const src = STAGE_SOURCE[t.stage] || "invented";
   const name = STAGE_NAME[t.stage] || String(t.title || t.stage).replace(/^\d+\.\s*/, "");
   const state = stateOf(t.verdict);
@@ -35,11 +34,12 @@ function Layer({ t, stop }) {
           <span className="check__name">{name}</span>
           <span className="check__word">{WORD[t.verdict] || t.verdict}</span>
           <span className="check__more">Detail<Chevron /></span>
-          {stop && (t.code || t.reason) ? <span className="check__why">{t.code ? <code className="check__code">{t.code}</code> : null}{t.reason ? visible(t.reason) : null}</span> : null}
         </summary>
         <div className="check__body">
+          {STAGE_GLOSS[t.stage] ? <p className="check__gloss" data-testid="layer-gloss">{STAGE_GLOSS[t.stage]}</p> : null}
+          {stop && code ? <p className="check__reason">The lab's code for this: <code className="check__code" data-testid="decision-code">{code}</code></p> : null}
+          {t.verdict !== "not-reached" && t.reason ? <p className="check__reason">{stop ? "The engine said: " : ""}{visible(t.reason)}</p> : null}
           <p className="check__src">Where this layer comes from: <SourceTag source={src} /> <span className="muted">{SOURCE_NOTE[src]}</span></p>
-          {!stop && t.verdict !== "not-reached" && t.reason ? <p className="check__reason">{visible(t.reason)}</p> : null}
           {t.detail ? <Json value={t.detail} label={`${t.stage} detail`} hot={["effective", "required", "lacking", "user", "matchedRules", "approval"]} /> : null}
         </div>
       </details>
@@ -49,18 +49,21 @@ function Layer({ t, stop }) {
 
 // The checklist: the layers that ran, one line each, then every layer after the stopping one folded into a single line (each still listed inside).
 function Checklist({ d }) {
-  const ran = d.trace.filter((t) => t.verdict !== "not-reached");
-  const skipped = d.trace.filter((t) => t.verdict === "not-reached");
+  // A layer whose banner says "Result withheld" reads Withheld on its row too. The engine records a fault at Reply inspection as a deny for that layer,
+  // but the call was already made and the outcome is a withheld result, so the row, the banner and the tally all say the same word.
+  const trace = d.trace.map((t) => (d.outcome === "withhold" && t.stage === d.stage && STOPS.has(t.verdict) ? { ...t, verdict: "withhold" } : t));
+  const ran = trace.filter((t) => t.verdict !== "not-reached");
+  const skipped = trace.filter((t) => t.verdict === "not-reached");
   const stopStage = (ran.find((t) => STOPS.has(t.verdict)) || {}).stage;
   const n = skipped.length;
   const tally = [["pass", "passed"], ["deny", "denied"], ["hold", "held"], ["refuse", "refused"], ["withhold", "withheld"], ["not-reached", "not checked"]]
-    .map(([v, w]) => [d.trace.filter((t) => t.verdict === v).length, w]).filter(([c]) => c > 0).map(([c, w]) => `${c} ${w}`).join(", ");
+    .map(([v, w]) => [trace.filter((t) => t.verdict === v).length, w]).filter(([c]) => c > 0).map(([c, w]) => `${c} ${w}`).join(", ");
   return (
     <>
       <h3 className="panel__sub">What the lab checked, in order</h3>
       <p className="muted" data-testid="trace-summary">{tally}</p>
       <ol className="checks" data-testid="trace">
-        {ran.map((t) => <Layer key={t.stage} t={t} stop={t.stage === stopStage} />)}
+        {ran.map((t) => <Layer key={t.stage} t={t} stop={t.stage === stopStage} code={d.code} />)}
         {n ? (
           <li className="check check--group" data-state="none" data-testid="trace-unchecked">
             <details>
@@ -78,15 +81,16 @@ function Checklist({ d }) {
   );
 }
 
-// The answer, first: allowed, held or denied, where, why, and what would make it pass or what happens next. The code is small supporting detail.
+// The answer, first: allowed, held or denied, where, why, and what would make it pass or what happens next. The layer's one-line gloss sits under the headline.
+// The engine's code and the source tag are not here: they live in the stopping layer's Detail.
 function Verdict({ d, mock }) {
   const v = verdictFor(d, { mock });
   return (
     <div className="verdict" data-testid="verdict" data-outcome={d.outcome} data-state={KIND_STATE[v.outcome] || "bad"}>
       <p className="verdict__head" data-testid="verdict-headline"><Mark v={v.outcome === "allow" ? "pass" : v.outcome} big />{v.headline}</p>
+      {v.gloss ? <p className="verdict__gloss" data-testid="verdict-gloss">{v.gloss}</p> : null}
       <p className="verdict__why" data-testid="verdict-why">{v.why}</p>
-      <p className="verdict__next" data-testid="verdict-next"><strong>{NEXT_LABEL[v.outcome]}:</strong> {v.next}</p>
-      <p className="verdict__code muted">The lab's code for this: <code data-testid="decision-code">{d.code}</code> &middot; Source of the three outcomes: <SourceTag source="deck" /></p>
+      <p className="verdict__next" data-testid="verdict-next"><strong>{v.nextLabel}{v.nextLabel.endsWith("?") ? "" : ":"}</strong> {v.next}</p>
     </div>
   );
 }
@@ -105,6 +109,7 @@ export default function Decision({ decision, caption, mock }) {
         {d.resultReleased ? "The result was released." : d.proceeded ? "The result was withheld." : ""}
         {d.failedClosed ? " The evaluation failed closed." : ""}
         {d.noApprovalPath ? " No approval can lift this." : ""}
+        {d.trace.some((t) => STOPS.has(t.verdict)) ? null : <> The lab's code for this: <code data-testid="decision-code">{d.code}</code>.</>}
       </p>
       {d.approval ? (
         <div className="panel" data-state="warn" data-testid="approval-box">

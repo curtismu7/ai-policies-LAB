@@ -8,7 +8,7 @@ import { LIMITS as CANON } from "../../server/src/canon.js";
 import { STAGES, STAGE_TITLE } from "../../server/src/engine.js";
 import { MOCK_TABLE } from "../../server/src/mockTable.js";
 import { MAX_TOKEN } from "../../server/src/token.js";
-import { STAGE_NAME, VERDICT_TEXT, verdictFor } from "./verdictText";
+import { STAGE_GLOSS, STAGE_NAME, VERDICT_TEXT, verdictFor } from "./verdictText";
 
 const SRC = path.resolve(import.meta.dirname, "../../server/src");
 const read = (f) => fs.readFileSync(path.join(SRC, f), "utf8");
@@ -72,5 +72,19 @@ describe("the numbers the text states are the engine's own", () => {
     expect(VERDICT_TEXT.arguments_too_deep.why).toContain(String(CANON.depth));
     expect(VERDICT_TEXT.number_not_exact.why).toContain(String(CANON.digits));
     expect(VERDICT_TEXT.token_malformed.why).toContain(String(MAX_TOKEN));
+  });
+});
+
+describe("layer glosses", () => {
+  it("every stage has a one-sentence gloss in the lab's own words, none empty or a copy of the name", () => {
+    expect(Object.keys(STAGE_GLOSS).sort()).toEqual([...STAGES].sort());
+    for (const s of STAGES) { expect(STAGE_GLOSS[s].length, s).toBeGreaterThan(30); expect(STAGE_GLOSS[s], s).toMatch(/\.$/); expect(STAGE_GLOSS[s]).not.toBe(STAGE_NAME[s]); }
+  });
+  it("Action scope's gloss says what it is for", () => {
+    expect(STAGE_GLOSS.action).toMatch(/carries the scope this tool requires/);
+  });
+  it("verdictFor hands back the gloss of the stopping layer, and none for an allow", () => {
+    expect(verdictFor({ outcome: "deny", stage: "action", code: "scope_missing", trace: [] }).gloss).toBe(STAGE_GLOSS.action);
+    expect(verdictFor({ outcome: "allow", stage: "reply-inspection", code: "allowed", trace: [] }).gloss).toBe("");
   });
 });
