@@ -12,8 +12,8 @@ import { post, get, withServer } from './helpers.js';
 const KEY = ['fake', 'agent', 'key'].join('-') + 'Q'.repeat(24);
 
 // A minimal Streamable-HTTP MCP door. tools/list answers 200 (its description echoes the key, to prove the scrub); tools/call is refused by policy (403).
-function stubGateway({ listStatus = 200 } = {}) {
-  const seen = [];
+function stubGateway({ listStatus = 200, toolNames = ['lookup', 'search'] } = {}) {
+  const seen = []; const called = [];
   const server = http.createServer((req, res) => {
     let raw = ''; req.on('data', (c) => { raw += c; });
     req.on('end', () => {
@@ -25,13 +25,13 @@ function stubGateway({ listStatus = 200 } = {}) {
       if (m.method === 'notifications/initialized') { res.writeHead(202).end(); return; }
       if (m.method === 'tools/list') {
         if (listStatus !== 200) return send(listStatus, { error: 'refused' });
-        return send(200, { jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'lookup', description: `echoes ${KEY}` }, { name: 'search', description: 'search' }] } });
+        return send(200, { jsonrpc: '2.0', id: m.id, result: { tools: toolNames.map((name, i) => ({ name, description: i === 0 ? `echoes ${KEY}` : name })) } });
       }
-      if (m.method === 'tools/call') return send(403, { error: 'refused by policy' });
+      if (m.method === 'tools/call') { called.push(m.params?.name); return send(403, { error: 'refused by policy' }); }
       return send(404, {});
     });
   });
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, seen, origin: `http://127.0.0.1:${server.address().port}` })));
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, seen, called, origin: `http://127.0.0.1:${server.address().port}` })));
 }
 
 async function withEnv(vars, fn) {
@@ -159,4 +159,27 @@ test('the check sets the netguard allow-list to exactly the door origin before t
   assert.match(src, /setAllowedOrigins\(\[door\.origin\]\)[\s\S]*door\.list\(/, 'setAllowedOrigins([door.origin]) runs before the first hop call');
   const guard = fs.readFileSync(new URL('../src/netguard.js', import.meta.url), 'utf8');
   assert.equal((guard.match(/originAllowed\(host\)/g) || []).length, 3, 'each guard names the allow-list once (no duplicated clause)');
+});
+
+test('Real through an aggregate door: the refusal probe is namespaced like the listed tools (<server>__<name>), so the gateway judges it and does not reject its shape', async () => {
+  const gw = await stubGateway({ toolNames: ['srv-a__lookup', 'srv-b__search'] });
+  try {
+    await withEnv(door(gw), () => withServer(async (url) => {
+      await post(url, '/api/mode', { source: 'real' });
+      const r = await post(url, '/api/gateway-check', {});
+      assert.equal(r.status, 200);
+      assert.deepEqual(gw.called, ['srv-a__ai_policies_refusal_probe_tool']);
+    }));
+  } finally { await closeGw(gw); }
+});
+
+test('Real through a door that lists plain tool names: the probe keeps its plain name', async () => {
+  const gw = await stubGateway();
+  try {
+    await withEnv(door(gw), () => withServer(async (url) => {
+      await post(url, '/api/mode', { source: 'real' });
+      await post(url, '/api/gateway-check', {});
+      assert.deepEqual(gw.called, ['ai_policies_refusal_probe_tool']);
+    }));
+  } finally { await closeGw(gw); }
 });
