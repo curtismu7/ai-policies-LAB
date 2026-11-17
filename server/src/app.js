@@ -118,7 +118,11 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
     // "What Privilege did" (Rule 25): a Real trace is built from the hop's own capture, so every decision is observed or inferred, never checked.
     const trace = { listing: traceFromDoor({ ...listing, wire: listWire }, { rpcMethod: 'tools/list' }) };
     if (listing.ok) {
-      const { wire: probeWire, ...probe } = await door.call(app, caller, 'ai_policies_refusal_probe_tool', {});
+      // An aggregate door names every tool <server>__<name> and rejects any other shape before it judges the call, which would show the shape error and not a
+      // refusal. So the probe borrows the server prefix of the first listed tool; a plain-named door keeps the plain name. The name exists nowhere, so nothing runs.
+      const first = listing.tools?.[0]?.name;
+      const server = typeof first === 'string' && first.includes('__') ? first.split('__')[0] : '';
+      const { wire: probeWire, ...probe } = await door.call(app, caller, `${server ? `${server}__` : ''}ai_policies_refusal_probe_tool`, {});
       out.refusal = probe;
       trace.refusal = traceFromDoor({ ...probe, wire: probeWire }, { rpcMethod: 'tools/call' });
     }
