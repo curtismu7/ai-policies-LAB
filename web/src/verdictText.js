@@ -23,7 +23,9 @@ export const VERDICT_TEXT = {
   ok: E("This layer passed, so the next one was checked.", ""),
   not_reached: E("This layer was not checked, because an earlier one had already stopped the call.", ""),
   allowed: E("Every layer passed, so the call was made and its result was released.", "Nothing to change."),
-  evaluation_error: E("A layer failed while it was checking. A failure is treated as a denial, so the call was stopped (the lab fails closed).", "Nothing in the call itself is wrong. Here it happens when the Lab fault switch is set, or when the lab hits an error of its own: set Lab fault to none and call again."),
+  evaluation_error: E("A layer failed while it was checking. A failure is treated as a denial, so the call was stopped (the lab fails closed).", "Set Lab fault to none and call again. If it was already none, the lab hit an error of its own: call again."),
+  // The call is made before the reply is checked, so a failure at Reply inspection does not stop the call: it withholds the result.
+  "evaluation_error@reply-inspection": E("The call was made, but the lab could not inspect the reply, so the result was not released. A reply that cannot be inspected is withheld (the lab fails closed).", "Set Lab fault to none and call again. If it was already none, the reply may be too long to inspect in full: call again with a shorter simulated reply."),
 
   // The call is read
   tool_missing: E("The call did not name a tool.", "Give the call a tool name."),
@@ -115,8 +117,11 @@ export const notCheckedBecause = (d) => (d?.outcome === "hold" ? "the call is he
 // "Denied at Action scope", but "Denied while reading the call": two of the layer names are sentences, not names.
 const WHERE = { request: "while reading the call", call: "while making the call (simulated upstream)" };
 
+// In Mock (read-only tables) there is no token form, Lab fault switch or policy editor, so a fix is something to try in Live; the sentence says so first.
+const MOCK_FIX = "Mock is read-only; to try the fix, switch to Live.";
+
 // The answer for one decision: { kind, headline, why, next, code, stage, layer }, in plain words. Never throws; an unknown code still gets a plain sentence.
-export function verdictFor(d) {
+export function verdictFor(d, { mock = false } = {}) {
   const outcome = d?.outcome in WORD ? d.outcome : "deny";
   const stage = d?.stage || null;
   const t = (d?.trace || []).find((x) => x.stage === stage) || null;
@@ -129,6 +134,7 @@ export function verdictFor(d) {
   if (facts) why = `${why} ${facts}`;
   let next = entry ? entry.next : "Read the engine's message below, then change the call, the token or the policy it names.";
   if (code === "hold_for_approval") next = `Have an approver sign ${d?.approval?.ref || "the request"} on the Approvals tab, then make the same call again.`;
+  if (mock && (outcome === "deny" || outcome === "withhold")) next = `${MOCK_FIX} ${next}`;
   if (d?.failedClosed && code !== "evaluation_error") why = `${why} The lab failed closed here.`;
   return { kind: KIND[outcome], headline, why, next, code, stage, layer, outcome };
 }

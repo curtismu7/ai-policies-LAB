@@ -118,6 +118,55 @@ describe("the verdict comes first", () => {
   });
 });
 
+// A lab fault in one layer, run through the real engine (the Lab fault switch, Live only).
+function faulted(labFault) {
+  const eng = new Engine(C); const p = presets.find((x) => x.id === "allowed");
+  return eng.evaluate({ token: eng.mintToken({ claims: p.claims }).labToken, ...p.request, labFault });
+}
+describe("an evaluation error reads true for the layer it happened in", () => {
+  it("at Reply inspection the call WAS made: the banner says the result was withheld, never that the call was stopped", () => {
+    const d = faulted("reply-inspection"); expect(d.code).toBe("evaluation_error"); expect(d.proceeded).toBe(true); show(d);
+    expect(screen.getByTestId("verdict-headline")).toHaveTextContent(/^Result withheld at Reply inspection$/);
+    const why = screen.getByTestId("verdict-why");
+    expect(why).toHaveTextContent(/The call was made, but the lab could not inspect the reply, so the result was not released/);
+    expect(why.textContent).not.toMatch(/call was stopped/);
+    expect(screen.getByTestId("decision")).toHaveTextContent(/The call was made\. The result was withheld\./); // the panel and the banner agree
+  });
+  it("at the call layer the call was NOT made, so 'the call was stopped' is true", () => {
+    const d = faulted("call"); expect(d.code).toBe("evaluation_error"); expect(d.proceeded).toBe(false); show(d);
+    expect(screen.getByTestId("verdict-why")).toHaveTextContent(/so the call was stopped/);
+    expect(screen.getByTestId("decision")).toHaveTextContent(/The call was not made\./);
+  });
+  it("the advice names the Lab fault switch as Live's, not as a fix for a call that is 'fine'", () => {
+    show(faulted("action"));
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/^What would make it pass: Set Lab fault to none and call again\./);
+    expect(screen.getByTestId("verdict-next").textContent).not.toMatch(/Nothing in the call itself is wrong/);
+    expect(screen.getByTestId("verdict-next").textContent).not.toMatch(/Mock is read-only/);
+  });
+});
+
+describe("Mock is read-only, so its advice says the fix is to try in Live", () => {
+  const mockShow = (d) => { setJsonView("raw"); return render(<Decision decision={{ result: d, http: d.http }} mock />); };
+  it("the Lab fault advice in Mock does not send the reader to a control that is not on the page", () => {
+    mockShow(faulted("action"));
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/^What would make it pass: Mock is read-only; to try the fix, switch to Live\. Set Lab fault to none and call again\./);
+  });
+  it("the token advice (mint, add a scope) says so too", () => {
+    mockShow(decide("action"));
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/Mock is read-only; to try the fix, switch to Live\. Add that scope to the token/);
+    cleanup(); mockShow(decide("tamper"));
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/Mock is read-only; to try the fix, switch to Live\. Mint a new token/);
+  });
+  it("an allow and a hold read the same as in Live", () => {
+    mockShow(decide("allowed")); expect(screen.getByTestId("verdict-next").textContent).not.toMatch(/Mock is read-only/);
+    cleanup(); mockShow(decide("hold")); expect(screen.getByTestId("verdict-next").textContent).not.toMatch(/Mock is read-only/);
+  });
+  it("a result withheld by a fault in Mock gets the same note", () => {
+    mockShow(faulted("reply-inspection"));
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/^What would release the result: Mock is read-only; to try the fix, switch to Live\./);
+  });
+});
+
 describe("one compact line per layer, the layers after a refusal collapsed", () => {
   it("denied at Action scope: five layers passed or stopped, the other five folded into one line with the right count", () => {
     show(decide("action"));

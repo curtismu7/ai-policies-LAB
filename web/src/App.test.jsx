@@ -315,6 +315,12 @@ describe("the Evaluate tab answers first, in Mock and in Live", () => {
     expect(screen.getByTestId("trace-unchecked")).toHaveTextContent(/^5 more layers not checked because an earlier one refused/);
     expect(screen.getByTestId("decision-code")).toHaveTextContent(/^scope_missing$/);
   });
+  it("Mock: the Fail closed scenario's error step does not tell the reader to use a control Mock does not have", async () => {
+    await mount(); await click("scenario-fail-closed"); await click("step-1");
+    expect(screen.getByTestId("decision-code")).toHaveTextContent(/^evaluation_error$/);
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/Mock is read-only; to try the fix, switch to Live\. Set Lab fault to none/);
+    expect(screen.queryByTestId("fault")).toBeNull(); // the control the advice names is not on the Mock page
+  });
   it("Live: the same call, run for real, gives the same verdict, and a hold and an allow read the same way", async () => {
     await mount(); await live();
     await run("action");

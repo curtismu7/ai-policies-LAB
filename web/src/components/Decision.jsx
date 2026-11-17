@@ -79,8 +79,8 @@ function Checklist({ d }) {
 }
 
 // The answer, first: allowed, held or denied, where, why, and what would make it pass or what happens next. The code is small supporting detail.
-function Verdict({ d }) {
-  const v = verdictFor(d);
+function Verdict({ d, mock }) {
+  const v = verdictFor(d, { mock });
   return (
     <div className="verdict" data-testid="verdict" data-outcome={d.outcome} data-state={KIND_STATE[v.outcome] || "bad"}>
       <p className="verdict__head" data-testid="verdict-headline"><Mark v={v.outcome === "allow" ? "pass" : v.outcome} big />{v.headline}</p>
@@ -92,14 +92,14 @@ function Verdict({ d }) {
 }
 
 // The decision for one evaluation: the answer, what was returned, and one compact line per layer in order.
-export default function Decision({ decision, caption }) {
+export default function Decision({ decision, caption, mock }) {
   if (!decision) return <p className="muted" data-testid="no-decision">No call evaluated yet.</p>;
   const d = decision.result || decision;
   const http = decision.http ?? d.http;
   return (
     <section className="panel" data-testid="decision" data-outcome={d.outcome} aria-label="Decision">
       <h2 className="panel__title">{caption || "Decision"} <StatusTag status={d.outcome} /> <span className="chip" data-testid="decision-http">HTTP {http}</span> <ClaimTag /></h2>
-      <Verdict d={d} />
+      <Verdict d={d} mock={mock} />
       <p className="muted">
         {d.proceeded ? "The call was made. " : "The call was not made. "}
         {d.resultReleased ? "The result was released." : d.proceeded ? "The result was withheld." : ""}

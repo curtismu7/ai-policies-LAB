@@ -41,7 +41,7 @@ function MockScenarios({ story, lab, scenarioId, setScenarioId, step, setStep })
           {s.op !== "evaluate" ? <Json value={s.result} label="result" testId="step-result" hot={["code", "status"]} /> : null}
         </section>
       ) : null}
-      {asDecision ? <Decision decision={{ result: asDecision, http: asDecision.http }} caption={`Step ${step + 1}`} /> : null}
+      {asDecision ? <Decision decision={{ result: asDecision, http: asDecision.http }} caption={`Step ${step + 1}`} mock /> : null}
       {asDecision ? <Trace trace={s.trace} /> : null}
     </div>
   );
