@@ -114,7 +114,7 @@ export const VERDICT_TEXT = {
   // Attended and unattended: hard denial, hold, and the approval problems
   "argument_missing@attended-unattended": E("A hold rule reads an argument that the call does not carry, so the lab cannot tell whether the rule applies, and it denies.", "Include that argument in the call."),
   "argument_type@attended-unattended": E("A hold rule compares an argument of the wrong type, so the lab denies.", "Send that argument with the type the rule compares."),
-  attended_refused: E("A rule refuses this call outright, even when a person is there to approve. This is a hard denial: no approval can lift it.", "No. Nothing the caller sends changes this, and an approval for another call does not help. Only a change to the rule does (Policies tab), or call something else."),
+  attended_refused: E("A rule refuses this call outright, even when a person is there to approve. This is a hard denial: no approval can lift it.", "No. Nothing the caller sends changes this, and an approval for another call does not help. Only a change to the rule on the Policies tab does, or call something else."),
   hold_without_approval: E("A rule asks for this call to be held but names no approval, so nobody could ever lift the hold. A hold that nobody can lift is a denial.", "Add an approval to that rule on the Policies tab."),
   hold_for_approval: E("A rule asks for a person to approve this call before it goes ahead. Nothing is kept waiting: the call was refused now, with a reference and an expiry.", "Have an approver sign the request on the Approvals tab, then make the same call again.",
     (t, d) => (many(d) ? `It needs ${d.approval.approvers} approvers, not one.` : "")),
