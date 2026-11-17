@@ -12,3 +12,10 @@ export const STAGE_SOURCE = {
   call: "invented",
   "reply-inspection": "deck",
 };
+
+// What each source tag means for a layer, in the words the Detail of that layer shows beside the tag.
+export const SOURCE_NOTE = {
+  deck: "Ping's slide 52 describes this check. That is a Ping release claim, UNVERIFIED on our tenant; how it is done here is the lab's own.",
+  reading: "The lab's reading of the deck. The deck does not say this in so many words.",
+  invented: "The lab's own mechanism. The deck does not describe it.",
+};

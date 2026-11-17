@@ -307,6 +307,33 @@ describe("source tags on every tab (S7)", () => {
   });
 });
 
+describe("the Evaluate tab answers first, in Mock and in Live", () => {
+  it("Mock: a scripted step denied at Action scope opens with the verdict and folds the layers after it", async () => {
+    await mount(); await click("step-3"); // four-layers: the token lacks the scope
+    expect(screen.getByTestId("verdict-headline")).toHaveTextContent(/^Denied at Action scope$/);
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/Add that scope to the token/);
+    expect(screen.getByTestId("trace-unchecked")).toHaveTextContent(/^5 more layers not checked because an earlier one refused/);
+    expect(screen.getByTestId("decision-code")).toHaveTextContent(/^scope_missing$/);
+  });
+  it("Mock: the Fail closed scenario's error step does not tell the reader to use a control Mock does not have", async () => {
+    await mount(); await click("scenario-fail-closed"); await click("step-1");
+    expect(screen.getByTestId("decision-code")).toHaveTextContent(/^evaluation_error$/);
+    expect(screen.getByTestId("verdict-next")).toHaveTextContent(/Mock is read-only; to try the fix, switch to Live\. Set Lab fault to none/);
+    expect(screen.queryByTestId("fault")).toBeNull(); // the control the advice names is not on the Mock page
+  });
+  it("Live: the same call, run for real, gives the same verdict, and a hold and an allow read the same way", async () => {
+    await mount(); await live();
+    await run("action");
+    expect(screen.getByTestId("verdict-headline")).toHaveTextContent(/^Denied at Action scope$/);
+    expect(within(screen.getByTestId("trace-action")).getByTestId("source-tag")).toHaveTextContent("deck claim");
+    expect(screen.getByTestId("trace-action").querySelector("summary")).toHaveTextContent(/scope_missing/);
+    await run("hold");
+    expect(screen.getByTestId("verdict-headline")).toHaveTextContent(/^Held at Attended and unattended$/);
+    await run("allowed");
+    expect(screen.getByTestId("verdict-headline")).toHaveTextContent(/^Allowed$/);
+  });
+});
+
 describe("a stored workspace id the server refuses (N1)", () => {
   it("is replaced and the request retried once: the tab loads, the id changes, and Reset works", async () => {
     window.sessionStorage.setItem("aip.workspace", "a1b2c3d4e5f6a7b8c9d0e1f2"); // passes the browser's pattern, looks like a credential to the server
