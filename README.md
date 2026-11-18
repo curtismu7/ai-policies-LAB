@@ -157,20 +157,20 @@ No SE k8s build (deferred by the owner, 2026-10-31). Every product claim stays U
 ## Real mode: through the PingOne Privilege gateway
 
 Real mode here is one live call through the SE PingOne Privilege gateway
-(`https://mcpgw.ai-demo.ping-devops.com`) with an agent access key from the shared settings
+(the SE Privilege gateway host, in the shared settings file) with an agent access key from the shared settings
 file (`~/Development/.env`, or the file `STANDALONE_ENV` names).
 
 **Privilege objects this lab uses:**
 
 | Object | Value |
 |---|---|
-| Gateway | `mcpgw.ai-demo.ping-devops.com` (cluster `ai-demo-cmuir`) |
-| Door (Agentic App) | `aggregate-limited` — client path `/aggregate-limited/mcp` |
+| Gateway | the SE Privilege gateway (host in the shared settings file) |
+| Agentic App | `aggregate-limited` — client path `/aggregate-limited/mcp` |
 | Caller | agent access key `APL_GW_KEY_LAB_AGENT` (write-only, never shown) |
 | Backend | `aggregate` = the gateway's MCP aggregate over `opensearch` (9 tools) + `banking-mcp` (33 tools); `aggregate-limited` = the same members with a tool filter |
 
 **What runs in Real:** the **Privilege gateway check** (`POST /api/gateway-check`, card on the
-page) — one live `tools/list` through the door with the key, then one `tools/call` probe of a
+page) — one live `tools/list` through the gateway with the key, then one `tools/call` probe of a
 tool no policy grants, so you see the gateway's own refusal shape. The gateway's words come
 back unaltered (keys scrubbed). Settings keys: `APL_GW_URL`, `APL_GW_APPS`,
 `APL_GW_KEY_<NAME>` (optional `APL_GW_VERSION`).
