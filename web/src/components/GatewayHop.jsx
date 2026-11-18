@@ -15,7 +15,7 @@ export default function GatewayHop() {
     : [];
   return (
     <div className="gwhop" data-testid="gateway-hop">
-      <PrivilegeCheck onResult={(r) => { setResult(r); setOpen(false); }} />
+      <PrivilegeCheck primaryRetry onResult={(r) => { setResult(r); setOpen(false); }} />
       {exchanges.length > 0 && (
         <div className="gwhop__trace">
           <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="gateway-trace-run">
