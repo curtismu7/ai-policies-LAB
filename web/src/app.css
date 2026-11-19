@@ -19,7 +19,7 @@ html { font-size: var(--fs, 16px); }
 .shell-bar .shell-right { margin-left: auto; } /* TopMenu renders .top-menu.shell-right; its own layout stays */
 @media (max-width: 600px) { .shell-bar { gap: 10px; padding: 10px 16px; } .shell-nav { order: 3; flex-basis: 100%; } }
 /* Page frame (section 3): one centred 1100px column; the simulation banner is its first child. */
-.page { max-width: 2200px; margin: 0 auto; padding: 4px 0 32px; }
+.page { max-width: 1600px; margin: 0 auto; padding: 4px 24px 32px; }
 .page-intro { margin: 12px 0 0; max-width: 78ch; color: var(--text-body); font-size: 14px; line-height: 1.5; }
 .page-panel { margin-top: 16px; }
 .chip { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; }
@@ -31,8 +31,17 @@ input[type="checkbox"] { width: 20px; height: 20px; min-height: 0; accent-color:
 textarea { width: 100%; display: block; font-family: var(--font-mono); font-size: 13px; margin: 4px 0 8px; }
 .stack { display: grid; gap: 12px; min-width: 0; }
 .stack > * { min-width: 0; }
-.cols { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-items: start; }
+.cols { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; align-items: start; }
 .cols > * { min-width: 0; }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+/* Numbered story flow on the landing tab: full-width panels top to bottom, paired panels share one row. */
+.step-num { display: inline-grid; place-items: center; min-width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent-gradient); color: var(--on-accent); font: 700 12px var(--font-mono);
+  margin-right: 8px; vertical-align: 2px; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.duo > * { min-width: 0; }
+.hops-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin-top: 12px; }
+@media (max-width: 900px) { .duo, .hops-grid { grid-template-columns: 1fr; } }
 .panel { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 12px 14px; min-width: 0; }
 .panel[data-state="warn"] { border-color: var(--status-warn); }
 .panel[data-state="bad"] { border-color: var(--danger-text); }
