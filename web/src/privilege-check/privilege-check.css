@@ -3,7 +3,7 @@
 /* The card's own tokens: fallbacks live in the definitions (the checker's allowance), uses read var(). */
 :root {
   --pcard-border: var(--border, #d9d9de);
-  --pcard-box: var(--box, #fff);
+  --pcard-box: var(--surface, #fff);
   --pcard-text: var(--text, #16181f);
   --pcard-muted: var(--muted, #555);
   --pcard-error: var(--ping-red, #d20e0f);
@@ -17,8 +17,7 @@
   margin: 0.75rem 0;
   background: var(--pcard-box);
   color: var(--pcard-text);
-  font-size: 0.9rem;
-  max-width: 46rem;
+  font-size: 1rem;
 }
 .pcard__head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
 .pcard__title { margin: 0; font-size: 1rem; }
@@ -36,13 +35,13 @@
 .pcard__note--honest { color: var(--pcard-muted); }
 .pcard__note--error { color: var(--pcard-error); }
 .pcard__facts { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.35rem 0; padding: 0; }
-.pcard__fact dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pcard-muted); }
-.pcard__fact dd { margin: 0; font-size: 0.85rem; }
-.pcard__mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; word-break: break-all; }
+.pcard__fact dt { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pcard-muted); }
+.pcard__fact dd { margin: 0; font-size: 0.95rem; }
+.pcard__mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; word-break: break-all; }
 .pcard__line { margin: 0.45rem 0 0.2rem; }
 .pcard__tools { margin: 0.2rem 0 0.2rem 1rem; padding: 0; }
 .pcard__raw {
   margin: 0.2rem 0; padding: 0.45rem 0.6rem; background: var(--pcard-box-dark); color: var(--pcard-on-box);
-  border-radius: 7px; font-size: 0.76rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  border-radius: 7px; font-size: 0.85rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
 }
-.pcard__how { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--pcard-muted); }
+.pcard__how { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--pcard-muted); }
