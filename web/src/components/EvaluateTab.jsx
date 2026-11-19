@@ -18,7 +18,7 @@ function MockScenarios({ story, lab, scenarioId, setScenarioId, step, setStep })
   return (
     <div className="stack">
       <div className="panel">
-        <h2 className="panel__title">Scripted scenarios (Mock) <ClaimTag /></h2>
+        <h2 className="panel__title"><span className="step-num" aria-hidden="true">1</span>Scripted scenarios (Mock) <ClaimTag /></h2>
         <p className="muted">Mock reads tables generated from the lab's own engine and is read-only. Pick a scenario and step through it; switch to Live to build a call yourself.</p>
         <div className="seg" role="group" aria-label="Scenario" data-testid="scenarios">
           {lab.scenarios.map((x) => <button key={x.id} type="button" aria-pressed={sc?.id === x.id} onClick={() => { setScenarioId(x.id); setStep(0); }} data-testid={`scenario-${x.id}`}>{x.title}</button>)}
@@ -34,14 +34,14 @@ function MockScenarios({ story, lab, scenarioId, setScenarioId, step, setStep })
       </div>
       {s ? (
         <section className="panel" data-testid="step-detail">
-          <h3 className="panel__sub">{s.title}</h3>
+          <h3 className="panel__sub"><span className="step-num" aria-hidden="true">2</span>{s.title}</h3>
           <p>{s.say}</p>
           {s.claims ? <details><summary>The claims in the token for this step{s.tampered ? " (one character changed after signing)" : ""} <SourceTag source="invented" /></summary><Json value={s.claims} label="claims" hot={["surfaces", "end_user", "department"]} /></details> : null}
           {s.request ? <details><summary>The {s.op === "evaluate" ? "call" : "request"}</summary><Json value={s.request} label="request" hot={["route", "tool", "ref", "approver"]} /></details> : null}
           {s.op !== "evaluate" ? <Json value={s.result} label="result" testId="step-result" hot={["code", "status"]} /> : null}
         </section>
       ) : null}
-      {asDecision ? <Decision decision={{ result: asDecision, http: asDecision.http }} caption={`Step ${step + 1}`} mock /> : null}
+      {asDecision ? <Decision num="3" decision={{ result: asDecision, http: asDecision.http }} caption={`Step ${step + 1}`} mock /> : null}
       {asDecision ? <Trace trace={s.trace} /> : null}
     </div>
   );
@@ -57,7 +57,7 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
   return (
     <div className="stack">
       <section className="panel" aria-label="Quick starts">
-        <h2 className="panel__title">Quick starts <ClaimTag /></h2>
+        <h2 className="panel__title"><span className="step-num" aria-hidden="true">1</span>Quick starts <ClaimTag /></h2>
         <p className="muted">Each fills the token claims and the call, and says what the lab will answer. "Run" mints a real RS256 token and evaluates in one click; "Load" only fills the form.</p>
         {groups.map((g) => (
           <fieldset className="fieldset" key={g}><legend>{g}</legend>
@@ -73,7 +73,7 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
       {!f ? <p className="muted" data-testid="form-empty">Load a quick start to fill the form.</p> : (
         <div className="cols">
           <section className="panel" data-testid="token-editor" aria-label="Token editor">
-            <h2 className="panel__title">Token</h2>
+            <h2 className="panel__title"><span className="step-num" aria-hidden="true">2</span>Token</h2>
             <p className="muted">A real RS256 JWT, signed by a throwaway key the lab generated in memory: <strong>mock-issued, not a credential for anything</strong>. Edit the claims and mint, or edit the token text itself: any change breaks the signature.</p>
             <label>Claims (JSON; iss, aud, iat, nbf and exp are set by the lab's issuer) <SourceTag source="invented" />
               <textarea rows={8} value={f.claimsText} onChange={(e) => set("claimsText", e.target.value)} data-testid="claims" spellCheck={false} />
@@ -91,7 +91,7 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
             {ev.minted ? <p className="muted" data-testid="minted-note">{ev.minted.label}. Expires {ev.minted.expiresAt}.</p> : null}
           </section>
           <section className="panel" data-testid="request-form" aria-label="Request builder">
-            <h2 className="panel__title">Call</h2>
+              <h2 className="panel__title"><span className="step-num" aria-hidden="true">3</span>Call</h2>
             <div className="filters">
               <label>Route (surface comes from the prefix) <SourceTag source="deck" /><input value={f.route} onChange={(e) => set("route", e.target.value)} data-testid="route" spellCheck={false} /></label>
               <label>Tool <SourceTag source="invented" /><input value={f.tool} onChange={(e) => set("tool", e.target.value)} data-testid="tool" spellCheck={false} /></label>
@@ -114,7 +114,7 @@ export default function EvaluateTab({ story, mode, lab, ev, scenarioId, setScena
           </section>
         </div>
       )}
-      <Decision decision={ev.decision} />
+      <Decision num="4" decision={ev.decision} />
       <Trace trace={ev.decision?.trace} />
     </div>
   );
