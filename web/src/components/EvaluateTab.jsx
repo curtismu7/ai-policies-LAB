@@ -36,9 +36,9 @@ function MockScenarios({ story, lab, scenarioId, setScenarioId, step, setStep })
         <section className="panel" data-testid="step-detail">
           <h3 className="panel__sub"><span className="step-num" aria-hidden="true">2</span>{s.title}</h3>
           <p>{s.say}</p>
-          {s.claims ? <details><summary>The claims in the token for this step{s.tampered ? " (one character changed after signing)" : ""} <SourceTag source="invented" /></summary><Json value={s.claims} label="claims" hot={["surfaces", "end_user", "department"]} /></details> : null}
-          {s.request ? <details><summary>The {s.op === "evaluate" ? "call" : "request"}</summary><Json value={s.request} label="request" hot={["route", "tool", "ref", "approver"]} /></details> : null}
-          {s.op !== "evaluate" ? <Json value={s.result} label="result" testId="step-result" hot={["code", "status"]} /> : null}
+          {s.claims ? <details><summary>The claims in the token for this step{s.tampered ? " (one character changed after signing)" : ""} <SourceTag source="invented" /></summary><Json value={s.claims} label="claims" hot={["surfaces", "end_user"]} /></details> : null}
+          {s.request ? <details><summary>The {s.op === "evaluate" ? "call" : "request"}</summary><Json value={s.request} label="request" hot={["tool", "approver"]} /></details> : null}
+          {s.op !== "evaluate" ? <Json value={s.result} label="result" testId="step-result" hot={["code"]} /> : null}
         </section>
       ) : null}
       {asDecision ? <Decision num="3" decision={{ result: asDecision, http: asDecision.http }} caption={`Step ${step + 1}`} mock /> : null}
