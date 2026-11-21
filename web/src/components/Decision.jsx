@@ -40,7 +40,7 @@ function Layer({ t, stop, code }) {
           {stop && code ? <p className="check__reason">The lab's code for this: <code className="check__code" data-testid="decision-code">{code}</code></p> : null}
           {t.verdict !== "not-reached" && t.reason ? <p className="check__reason">{stop ? "The engine said: " : ""}{visible(t.reason)}</p> : null}
           <p className="check__src">Where this layer comes from: <SourceTag source={src} /> <span className="muted">{SOURCE_NOTE[src]}</span></p>
-          {t.detail ? <Json value={t.detail} label={`${t.stage} detail`} hot={["effective", "required", "lacking", "user", "matchedRules", "approval"]} /> : null}
+          {t.detail ? <Json value={t.detail} label={`${t.stage} detail`} hot={["lacking", "matchedRules"]} /> : null}
         </div>
       </details>
     </li>

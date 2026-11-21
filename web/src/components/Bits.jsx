@@ -30,8 +30,8 @@ export function Hops({ hops, traceId, truncated }) {
       {hops.map((h) => (
         <div key={h.n}>
           <h4 className="hops__title">{h.n}. {h.label}</h4>
-          <Json value={h.request} label={`hop ${h.n} request`} hot={["url", "tool", "requester", "callHash"]} />
-          <Json value={h.response} label={`hop ${h.n} response`} hot={["status", "code", "stage"]} />
+          <Json value={h.request} label={`hop ${h.n} request`} hot={["tool"]} />
+          <Json value={h.response} label={`hop ${h.n} response`} hot={["code"]} />
         </div>
       ))}
     </details>
