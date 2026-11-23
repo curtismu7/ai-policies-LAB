@@ -40,7 +40,7 @@ const stepRows = (rec, n) => rows(rec).filter((r) => r.detail.step === n);
 
 // ---- A fake Privilege gateway on loopback: the MCP calls the lab's client makes, answered by a script ------------------------------------------
 async function fakeGateway({ closeDelayMs = 0 } = {}) {
-  const g = { script: { list: null, call: null }, seen: [], url: '', port: 0, initFail: 0, notifyFail: 0, initRpcError: false };
+  const g = { script: { list: null, call: null }, seen: [], url: '', port: 0, initFail: 0, notifyFail: 0, initRpcError: false, initEmpty: false };
   const json = (res, obj, status = 200, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(obj)); };
   const server = http.createServer((req, res) => {
     let body = ''; req.on('data', (c) => { body += c; });
@@ -48,6 +48,7 @@ async function fakeGateway({ closeDelayMs = 0 } = {}) {
       if (req.method === 'DELETE') { setTimeout(() => { res.writeHead(200); res.end(); }, closeDelayMs); return undefined; }
       let m; try { m = JSON.parse(body); } catch { res.writeHead(400); return res.end(); }
       g.seen.push({ method: m.method, auth: req.headers.authorization });
+      if (m.method === 'initialize' && g.initEmpty) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(); }
       if (m.method === 'initialize' && g.initFail) return json(res, { message: 'handshake refused' }, g.initFail);
       if (m.method === 'initialize' && g.initRpcError) return json(res, { jsonrpc: '2.0', id: m.id, error: { code: -32000, message: 'no handshake' } });
       if (m.method === 'notifications/initialized' && g.notifyFail) return json(res, { message: 'handshake refused' }, g.notifyFail);
@@ -754,6 +755,32 @@ test('Real: an empty reply to a call that expects one is no reply, never an empt
     assert.deepEqual(rows(rec).map((r) => r.outcome), ['allowed'], 'the tool list is a real answer; the empty probe reply is not');
     assert.match(rec.reasons.gateway, /refusal probe got no reply/);
     assert.match(lines.at(-1), / step=gateway-probe .* result=no-reply /);
+    assert.deepEqual(assertRunObservability(rec), []);
+  }, { runLog: createRunLog({ write: (l) => lines.push(l) }) });
+});
+
+test('a result-less initialize reply is accepted as before (the handshake takes its defaults); only tools/list and the probe count an empty reply as no reply', async () => {
+  const lines = [];
+  const empty = ({ res }) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(); };
+  await withGateway(async (url, gw) => {
+    gw.initEmpty = true; gw.script.list = tools(2); gw.script.call = status(403);
+    await toReal(url);
+    const out = await check(url);
+    assert.equal(out.listing.ok, true, 'a result-less initialize is not a failed handshake');
+    const { record: rec } = await record(url, `?runId=${out.runId}`);
+    assert.deepEqual(rows(rec).map((r) => r.outcome), ['allowed', 'refused'], 'the tool list and the probe are read as before');
+    assert.deepEqual(assertRunObservability(rec), []);
+  }, { runLog: createRunLog({ write: (l) => lines.push(l) }) });
+  lines.length = 0;
+  await withGateway(async (url, gw) => {
+    gw.initEmpty = true; gw.script.list = empty; gw.script.call = status(403);
+    await toReal(url);
+    const out = await check(url);
+    assert.equal(out.listing.ok, false);
+    const { record: rec } = await record(url, `?runId=${out.runId}`);
+    assert.equal(rows(rec).length, 0, 'a result-less tools/list is a no-reply, not an empty listing');
+    assert.match(rec.reasons.gateway, /tools\/list call got no reply/);
+    assert.match(lines.at(-1), / step=gateway-list .* result=no-reply cause=no-reply /);
     assert.deepEqual(assertRunObservability(rec), []);
   }, { runLog: createRunLog({ write: (l) => lines.push(l) }) });
 });

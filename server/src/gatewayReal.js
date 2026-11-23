@@ -94,7 +94,7 @@ export function createHttpClient({ url, getAuth, timeoutMs = 15_000, clientInfo 
   const state = { sessionId: null, protocolVersion: null, initialized: false, pending: null, info: null };
   let msgId = 0;
 
-  async function post(method, params, id) {
+  async function post(method, params, id, expectsResult = false) {
     const headers = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
     const auth = getAuth?.();
     if (auth) headers[auth[0]] = auth[1];
@@ -125,8 +125,9 @@ export function createHttpClient({ url, getAuth, timeoutMs = 15_000, clientInfo 
       const json = id === undefined ? (res.body?.cancel().catch(() => {}), undefined) : await readReply(res, id);
       if (rec) rec.response.body = json ?? null;
       if (json?.error) throw rpcError(json.error.message || 'MCP JSON-RPC error', 'mcp_rpc_error', { mcpCode: json.error.code });
-      // a call that expects an answer and got none (an empty body, or a stream with no matching reply) is no reply, never an empty result
-      if (id !== undefined && json?.result === undefined) throw rpcError('MCP HTTP reply had no result', 'mcp_no_reply');
+      // a call that expects an answer and got none (an empty body, or a stream with no matching reply) is no reply, never an empty result.
+      // Only the tools/list and probe calls (rpc) expect one; the opening initialize keeps its old reading of a result-less reply.
+      if (expectsResult && json?.result === undefined) throw rpcError('MCP HTTP reply had no result', 'mcp_no_reply');
       return json?.result;
     } catch (err) {
       if (rec && !rec.response) rec.error = String(err?.message || 'failed').slice(0, 300);
@@ -151,11 +152,11 @@ export function createHttpClient({ url, getAuth, timeoutMs = 15_000, clientInfo 
 
   async function rpc(method, params = {}) {
     await ensure();
-    try { return await post(method, params, ++msgId); } catch (err) {
+    try { return await post(method, params, ++msgId, true); } catch (err) {
       if (err.httpStatus === 404 && state.sessionId) {
         state.initialized = false; state.sessionId = null;
         await ensure();
-        return post(method, params, ++msgId);
+        return post(method, params, ++msgId, true);
       }
       throw err;
     }
