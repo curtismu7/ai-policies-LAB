@@ -31,6 +31,7 @@ function waiting(real, check, scenarioId) {
   if (real) {
     if (check.phase === "done") return check.runId ? null : { id: "ro-no-run", role: "alert", text: "The gateway check ran, but the lab did not keep a record of it (the server log says why)." };
     if (check.phase === "error") return { id: "ro-no-run", role: "alert", text: `The gateway check did not complete, so there is no run to show (and no older one is shown in its place). ${check.reason || ""}`.trim() };
+    if (check.phase === "not-configured") return { id: "ro-no-run", role: "alert", text: `Real is not configured, so there is no gateway check and no run to show. ${check.reason || ""}`.trim() };
     return { id: "ro-loading", text: "Collecting this run's logs…" };
   }
   return scenarioId ? null : { id: "ro-loading", text: "Collecting this run's logs…" };

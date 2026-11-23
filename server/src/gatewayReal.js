@@ -125,6 +125,8 @@ export function createHttpClient({ url, getAuth, timeoutMs = 15_000, clientInfo 
       const json = id === undefined ? (res.body?.cancel().catch(() => {}), undefined) : await readReply(res, id);
       if (rec) rec.response.body = json ?? null;
       if (json?.error) throw rpcError(json.error.message || 'MCP JSON-RPC error', 'mcp_rpc_error', { mcpCode: json.error.code });
+      // a call that expects an answer and got none (an empty body, or a stream with no matching reply) is no reply, never an empty result
+      if (id !== undefined && json?.result === undefined) throw rpcError('MCP HTTP reply had no result', 'mcp_no_reply');
       return json?.result;
     } catch (err) {
       if (rec && !rec.response) rec.error = String(err?.message || 'failed').slice(0, 300);
@@ -242,7 +244,8 @@ export function readRefusal(err) {
 export function createRealDoor({ config, client = createHttpClient, clientInfo, capture = false } = {}) {
   if (!config?.ok) return null;
   const secrets = () => config.callers.map((c) => c.key);
-  const refusal = (err) => ({ status: err?.httpStatus ?? null, message: scrub(err?.message || 'the gateway refused', secrets()).slice(0, 400), layer: readRefusal(err) });
+  // `code` says which fault it was: only a JSON-RPC error inside a successful HTTP reply (mcp_rpc_error) is the gateway's own answer; a fault with no status is not.
+  const refusal = (err) => ({ status: err?.httpStatus ?? null, code: err?.code ?? null, message: scrub(err?.message || 'the gateway refused', secrets()).slice(0, 400), layer: readRefusal(err) });
 
   // `capture: true` adds a `wire` array to every result (additive): each HTTP exchange of the call, redacted at capture.
   const sized = (w) => {

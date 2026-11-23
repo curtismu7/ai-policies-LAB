@@ -142,6 +142,17 @@ describe("Real", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("a check that says Real is not configured is an alert with no run: it never stays on Collecting, asks nothing, and shows no older record", async () => {
+    answers["/api/run-observability?runId=gw-1"] = ok({ record: { ...realRecord, runId: "gw-1" } });
+    const { rerender } = render(realPanel({ phase: "done", runId: "gw-1" }));
+    await screen.findByTestId("run-observability");
+    rerender(realPanel({ phase: "not-configured", reason: "Set APL_GW_URL in the shared settings file." }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/Real is not configured.*no run to show.*APL_GW_URL/s);
+    expect(screen.queryByTestId("ro-loading")).toBeNull();
+    expect(screen.queryByTestId("run-observability")).toBeNull();
+    expect(calls).toHaveLength(1);
+  });
+
   it("a run the lab no longer keeps is a note, not a record", async () => {
     answers["/api/run-observability?runId=gw-9"] = ok({ record: null, message: "That gateway check is no longer kept (the lab keeps the last few)." });
     render(realPanel({ phase: "done", runId: "gw-9" }));

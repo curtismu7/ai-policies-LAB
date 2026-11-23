@@ -232,9 +232,12 @@ export function replyOf(step, r) {
   if (status === 401) return failed('refused', 'status-401', `The gateway answered HTTP 401 ${opening}: it did not accept the agent key.`, { status, ms: r.ms });
   if (status === 403) return failed('refused', 'status-403', `The gateway answered HTTP 403 ${opening}${step === 'probe' ? '. For a tool nothing grants, that is the answer the probe expects if it came from the call itself' : ''}.`, { status, ms: r.ms });
   if (status !== null) return failed('info', `status-${status}`, `The gateway answered HTTP ${status} ${opening}. That status is not a policy verdict, so it is counted as information.`, { status, ms: r.ms });
+  if (f.code === 'mcp_no_reply') return null;
   const text = String(f.message ?? '');
   if (NO_REPLY.test(text)) return null;
   if (UNREAD.test(text)) return failed('info', 'unreadable', `The lab could not read the gateway's answer ${opening} as a tool result, so it is counted as information.`, { ms: r.ms });
+  // only a JSON-RPC error inside a successful HTTP reply is the gateway's own answer; any other fault (a dropped connection, a body cut short) is not a verdict
+  if (f.code !== 'mcp_rpc_error') return failed('info', 'transport-fault', `The lab's connection to the gateway failed ${opening} with a fault that is not a gateway answer, so it is counted as information.`, { ms: r.ms });
   return failed('refused', 'jsonrpc-error', `The gateway answered ${opening} with a JSON-RPC error inside a successful HTTP reply: the lab reads that as a refusal.`, { ms: r.ms });
 }
 
@@ -269,7 +272,7 @@ export function createRunLog({ write = (line) => process.stdout.write(`${line}\n
           const r = replyOf(step, result);
           if (!r) {
             // The shared client's "unreachable" and "timed out" words are the only sign of no connection, so a gateway refusal that used those exact words reads the same way.
-            run.notes.push(`The ${step === 'probe' ? 'refusal probe' : 'tools/list call'} got no reply (it did not connect, or it timed out), so it has no row. The lab reads a failure carrying exactly the shared client's "unreachable" or "timed out" words as no connection; a gateway refusal that used those exact words could, in rare cases, be read this way. It is never shown as allowed.`);
+            run.notes.push(`The ${step === 'probe' ? 'refusal probe' : 'tools/list call'} got no reply (it did not connect, or it timed out, or the gateway sent an empty reply), so it has no row. The lab reads a failure carrying exactly the shared client's "unreachable" or "timed out" words as no connection; a gateway refusal that used those exact words could, in rare cases, be read this way. It is never shown as allowed.`);
             write(decisionLine({ step: step === 'probe' ? 'gateway-probe' : 'gateway-list', layer: 'gateway', who: caller, noReply: true, cause: 'no-reply' }, at, run.id));
             return;
           }

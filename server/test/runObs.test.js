@@ -24,8 +24,11 @@ const PRODUCTS = [...new Set(layerMatchers.map((m) => m.product))];
 const fragments = (...p) => p.join('');
 const KEY = fragments('fake-agent-key-', 'qqqqqqqqqq', '-end');
 const rows = (rec) => rec.rows.filter((r) => r.origin !== 'not-logged');
-const noMatcherReads = (line) => { for (const product of PRODUCTS) { const at = line.split(' ')[0]; assert.equal(classify({ product, message: line, at: Date.parse(at), atExact: at }, []), null, `${product}: ${line}`); } };
-const clean = (line) => { assert.match(line, LINE, line); assert.ok(!WORDS.test(line), line); noMatcherReads(line); noMatcherReads(`[${line.split(' ')[0]}] INFO: ${line.split(' ').slice(1).join(' ')}`); };
+const noMatcherReads = (line, at = line.split(' ')[0]) => { for (const product of PRODUCTS) assert.equal(classify({ product, message: line, at: Date.parse(at), atExact: at }, []), null, `${product}: ${line}`); };
+// Every shape a stdout line can reach a shared matcher in: bare, logback, the Privilege gateway's logfmt, the PingFederate audit prefix, and JSON with the line in a
+// message field. The OpenIG access matcher keys on eventName OPENIG-HTTP-ACCESS, which a line this lab writes never carries, so the JSON form has no eventName.
+const wrapped = (line) => { const at = line.split(' ')[0]; const body = line.split(' ').slice(1).join(' '); return { at, forms: [line, `[${at}] INFO: ${body}`, `time=${at} level=info msg="${line}"`, `/opt/out/instance/log/audit.log: ${at} | tid: ${body}`, JSON.stringify({ level: 'info', msg: line })] }; };
+const clean = (line) => { assert.match(line, LINE, line); assert.ok(!WORDS.test(line), line); const { at, forms } = wrapped(line); for (const form of forms) noMatcherReads(form, at); };
 const stderrOf = async (fn) => {
   const written = []; const realWrite = process.stderr.write;
   process.stderr.write = (c, ...rest) => { written.push(String(c)); return typeof rest.at(-1) === 'function' ? rest.at(-1)() : true; };
@@ -702,6 +705,57 @@ test('a gateway refusal that uses the shared client\'s own "unreachable" or "tim
       assert.deepEqual(assertRunObservability(rec), []);
     });
   }
+});
+
+test('Real: a fault with no HTTP status that is not a JSON-RPC error is information, never a gateway refusal (the reply is cut short mid-body)', async () => {
+  const lines = [];
+  // The status and headers arrive, then the connection drops while the body is read: the client rethrows that fault with no code of its own.
+  const cutShort = ({ res }) => { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"jsonrpc":"2.0","id":'); setTimeout(() => res.destroy(), 20); };
+  await withGateway(async (url, gw) => {
+    gw.script.list = cutShort; gw.script.call = status(403);
+    await toReal(url);
+    const out = await check(url);
+    assert.equal(out.listing.ok, false);
+    const { record: rec } = await record(url, `?runId=${out.runId}`);
+    assert.deepEqual(rows(rec).map((r) => r.outcome), ['info'], 'a dropped reply is not shown as a refusal');
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], / result=unclear cause=transport-fault /);
+    assert.ok(!lines.some((l) => / result=stopped /.test(l)));
+    assert.deepEqual(assertRunObservability(rec), []);
+  }, { runLog: createRunLog({ write: (l) => lines.push(l) }) });
+  // the reading itself: only a JSON-RPC error is a refusal; a fault with no status and no code is information, and "no reply" is no row
+  const fault = replyOf('tools/list', { ok: false, refusal: { status: null, code: null, message: 'socket hang up' } });
+  assert.deepEqual([fault.outcome, fault.cause], ['info', 'transport-fault']);
+  assert.equal(replyOf('tools/list', { ok: false, refusal: { status: null, code: 'mcp_rpc_error', message: 'no' } }).cause, 'jsonrpc-error');
+  assert.equal(replyOf('tools/list', { ok: false, refusal: { status: null, code: 'mcp_no_reply', message: 'MCP HTTP reply had no result' } }), null);
+});
+
+test('Real: an empty reply to a call that expects one is no reply, never an empty tool list or an answer (a tools/list or a probe)', async () => {
+  const lines = [];
+  const empty = ({ res }) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(); };
+  await withGateway(async (url, gw) => {
+    gw.script.list = empty; gw.script.call = status(403);
+    await toReal(url);
+    const out = await check(url);
+    assert.equal(out.listing.ok, false);
+    const { record: rec } = await record(url, `?runId=${out.runId}`);
+    assert.equal(rows(rec).length, 0, 'an empty reply is not a listing of zero tools');
+    assert.match(rec.reasons.gateway, /tools\/list call got no reply/);
+    assert.match(lines.at(-1), / step=gateway-list .* result=no-reply cause=no-reply /);
+    assert.deepEqual(assertRunObservability(rec), []);
+    assert.ok(!gw.seen.some((s) => s.method === 'tools/call'), 'the probe waits for a tool list');
+  }, { runLog: createRunLog({ write: (l) => lines.push(l) }) });
+  lines.length = 0;
+  await withGateway(async (url, gw) => {
+    gw.script.list = tools(2); gw.script.call = empty;
+    await toReal(url);
+    const out = await check(url);
+    const { record: rec } = await record(url, `?runId=${out.runId}`);
+    assert.deepEqual(rows(rec).map((r) => r.outcome), ['allowed'], 'the tool list is a real answer; the empty probe reply is not');
+    assert.match(rec.reasons.gateway, /refusal probe got no reply/);
+    assert.match(lines.at(-1), / step=gateway-probe .* result=no-reply /);
+    assert.deepEqual(assertRunObservability(rec), []);
+  }, { runLog: createRunLog({ write: (l) => lines.push(l) }) });
 });
 
 test('the Real record and the stdout line do not depend on a declared caller id: rows are identical for any caller label, and a label that looks like a key is masked, never shortened', async () => {
