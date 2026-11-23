@@ -6,6 +6,7 @@ import { Engine } from './engine.js';
 import { perform } from './actions.js';
 import { VERTICALS } from './cast.js';
 import { callHash, canonicalJson, METHODS, normalizeArguments } from './canon.js';
+import { mark, observeAction, tableEvent } from './runObs.js';
 
 const base = (c, o = {}) => ({ sub: c.castAgent, surfaces: ['tool', 'model', 'agent'], scope: `${c.castApp}:read ${c.castApp}:write`, department: c.castDept, end_user: c.castUser, ...o });
 const route = (c) => `/mcp/${c.castApp}`;
@@ -116,17 +117,20 @@ const tag = (r, op) => {
   return 'ok';
 };
 
-// Runs one scenario on a fresh engine. Returns { engine, steps } with each step's result, compact and free of any token string.
+// Runs one scenario on a fresh engine. Returns { engine, steps, events } with each step's result, compact and free of any token string. The events (rule 27) are the
+// ones the engine decided for each step, taken from its own answer as the step ran: stored once here, in the table, with the step number.
 export function runScenario(cast, sc) {
-  const e = new Engine(cast); const steps = [];
-  for (const s of sc.steps) {
+  const e = new Engine(cast); const steps = []; const events = [];
+  for (const [i, s] of sc.steps.entries()) {
     let params = s.params; let shownClaims = null;
     if (s.op === 'evaluate') {
       const t = e.mintToken({ claims: s.claims, ttlMin: s.ttl });
       shownClaims = s.claims;
       params = { ...s.request, token: s.tamper ? tamper(t.labToken) : t.labToken };
     }
+    const before = mark(e);
     const r = perform(e, s.op, params);
+    for (const ev of observeAction(e, { op: s.op, outcome: r, before, params }).events) events.push(tableEvent(ev, events.length + 1, i + 1));
     steps.push({
       title: s.title, say: s.say, op: s.op, expect: s.expect, got: tag(r, s.op),
       request: s.op === 'evaluate' ? s.request : s.params, claims: shownClaims, tampered: !!s.tamper,
@@ -134,7 +138,7 @@ export function runScenario(cast, sc) {
       ok: r.ok,
     });
   }
-  return { engine: e, steps };
+  return { engine: e, steps, events };
 }
 
 // Canonical-form examples (pure computation): the same call written several ways gives one hash, a different call gives another.
@@ -163,8 +167,8 @@ export function buildMockTable() {
     verticals[id] = {
       canonicalExamples: canonicalExamples(cast),
       scenarios: list.map((sc) => {
-        const { engine, steps } = runScenario(cast, sc);
-        return { id: sc.id, title: sc.title, say: sc.say, steps, state: engine.snapshot() };
+        const { engine, steps, events } = runScenario(cast, sc);
+        return { id: sc.id, title: sc.title, say: sc.say, steps, events, state: engine.snapshot() };
       }),
     };
   }

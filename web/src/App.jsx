@@ -15,6 +15,7 @@ import useEvaluator from "./hooks/useEvaluator";
 import { buildPresets } from "./presets";
 import { getJson, postJson, resetWorkspace } from "./api";
 import GatewayHop from "./components/GatewayHop";
+import RunObs from "./components/RunObs";
 
 export const TABS = [
   { id: "evaluate", label: "Evaluate" },
@@ -28,6 +29,8 @@ export const TABS = [
 // The banner is never blank and never claims one mode before it knows: until the story answers it says both, honestly.
 const TAIL = "Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). No identity provider, chat tool or tenant is called; the only real call is the optional Privilege gateway card, in Real.";
 export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (Mock is loopback only with no outbound network). ${TAIL}`;
+// The tabs that run or show the engine: the run panel (rule 27) and the last action sit under them, not under the diagram or the talk track.
+const WORKING_TABS = ["evaluate", "policies", "approvals", "where", "closed"];
 const PRESENTER_TALK = { evaluate: ["say-first", "two-controls", "four-layers"], policies: ["four-layers"], approvals: ["hold", "bound", "period"], where: ["where", "hard"], closed: ["closed"], diagram: ["why-ai-policies"] };
 
 const THEME_KEY = "aip.theme";
@@ -52,6 +55,9 @@ export default function App() {
   const [error, setError] = useState(null);
   const [tab, setTab] = useState(tabFromHash());
   const [presenter, setPresenter] = useState(false);
+  // Rule 27: where the page's gateway check (the card, in Real) is, so the run panel asks for THAT check's record and never shows an older one.
+  const [check, setCheck] = useState({ phase: "checking" });
+  const onCheck = useCallback((next) => setCheck(next.phase === "done" ? { phase: "done", runId: typeof next.runId === "string" ? next.runId : null } : { phase: next.phase, reason: next.reason }), []);
   const [resetSignal, setResetSignal] = useState(0);
   const [resetMsg, setResetMsg] = useState("");
   const [theme, setTheme] = useState(initialTheme);
@@ -86,6 +92,7 @@ export default function App() {
     setModeError(null);
     const r = await postJson("/api/mode", { source: m === "live" ? "real" : "mock" });
     if (!r.ok) { setModeError(r.body?.detail || r.body?.error || `HTTP ${r.status}`); return; }
+    if (m === "live" && mode !== "live") setCheck({ phase: "checking" }); // entering Real mounts the gateway card, which runs a new check
     setModeState(r.body?.mode || m);
     await lab.reload();
   };
@@ -148,7 +155,7 @@ export default function App() {
         {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
         <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
         {!presenter && story && <p className="page-intro">{story.intro}</p>}
-        {mode === "live" && <GatewayHop />}
+        {mode === "live" && <GatewayHop onCheck={onCheck} />}
         <div id={`panel-${tab}`} className="page-panel">
           {error || lab.error ? <p className="app-error" role="alert">Could not load the lab ({error || lab.error}). Is the server running?</p> : !ready ? <p className="muted">Loading...</p> : (
             <>
@@ -164,7 +171,8 @@ export default function App() {
               {tab === "closed" && <FailClosedTab {...props} ev={ev} presets={presets} />}
               {tab === "diagram" && <DiagramTab vertical={vertical} resetSignal={resetSignal} />}
               {tab === "talk" && <TalkTrack talk={story.talkTrack} />}
-              {mode === "live" && ["evaluate", "policies", "approvals", "where", "closed"].includes(tab) && <LastAction last={lab.last} />}
+              {mode === "live" && WORKING_TABS.includes(tab) && <LastAction last={lab.last} />}
+              {WORKING_TABS.includes(tab) && <RunObs source={mode === "live" ? "real" : "mock"} vertical={vertical} scenarioId={lab.scenario?.id} check={check} />}
             </>
           )}
         </div>

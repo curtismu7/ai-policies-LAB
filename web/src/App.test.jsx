@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import userEvent from "@testing-library/user-event";
 import { createApp, startHttpServer } from "../../server/src/app.js";
 import { createHealth } from "../../server/src/health.js";
+import { createRunLog } from "../../server/src/runObs.js";
 import { VERTICALS } from "../../server/src/cast.js";
 import App, { BANNER_UNKNOWN, TABS } from "./App";
 import { fitOptions, labelOffsets } from "./components/PatternDiagram";
@@ -24,7 +25,7 @@ beforeAll(async () => {
   process.env.STANDALONE_ENV = "/nonexistent/standalone.env";
   for (const k of Object.keys(process.env)) if (k.startsWith("APL_GW_")) delete process.env[k];
   const health = createHealth({ runChecks: async () => [], intervalMs: 3_600_000 });
-  ({ server, url: base } = await startHttpServer({ port: 0, host: "127.0.0.1", app: createApp({ health, configFile: "/nonexistent/customer.config.json" }) }));
+  ({ server, url: base } = await startHttpServer({ port: 0, host: "127.0.0.1", app: createApp({ health, configFile: "/nonexistent/customer.config.json", runLog: createRunLog({ write: () => {} }) }) }));
   base = base.replace(/\/$/, "");
   globalThis.fetch = async (u, init = {}) => {
     const url = typeof u === "string" && u.startsWith("/") ? `${base}${u}` : u;
@@ -40,7 +41,7 @@ beforeAll(async () => {
   };
 });
 afterAll(async () => { globalThis.fetch = realFetch; await new Promise((r) => server.close(r)); });
-beforeEach(async () => { cleanup(); forgetWorkspace(); seen = []; delay = () => 0; override = () => null; pending = 0; try { window.localStorage.clear(); window.sessionStorage.clear(); } catch { /* ignore */ } window.location.hash = ""; // rule 19: the server holds the mode, so every test starts from mock
+beforeEach(async () => { cleanup(); await waitFor(() => expect(pending).toBe(0), { timeout: 20000 }).catch(() => {}); /* a request the last test left in flight is awaited, not forgotten: it would count the next test's requests down to -1 */ forgetWorkspace(); seen = []; delay = () => 0; override = () => null; pending = 0; try { window.localStorage.clear(); window.sessionStorage.clear(); } catch { /* ignore */ } window.location.hash = ""; // rule 19: the server holds the mode, so every test starts from mock
   await realFetch(`${base}/api/mode`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ source: "mock" }) }); });
 
 const T = { timeout: 20000 };
@@ -427,6 +428,114 @@ describe("Real: the Privilege gateway card and What Privilege did", () => {
       expect(document.body.textContent).not.toContain(KEY);
       await click("mode-select", "mock");
       await waitFor(() => expect(screen.queryByTestId("gateway-hop")).toBeNull(), T);
+    } finally {
+      globalThis.fetch = patched;
+      for (const [k, v] of keep) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+      await new Promise((r) => gw.close(r));
+    }
+  });
+});
+
+describe("Run observability (rule 27)", () => {
+  const asked = () => seen.map((s) => s.url).filter((u) => /\/api\/run-observability/.test(u));
+  const simulated = () => screen.getByTestId("ro-table").querySelectorAll('tr.ro-row[data-origin="simulated"]').length;
+  const KEY = ["fake", "agent", "key"].join("-") + "Q".repeat(24);
+  const gateway = () => http.createServer((req, res) => {
+    let raw = ""; req.on("data", (c) => { raw += c; });
+    req.on("end", () => {
+      if (req.method !== "POST") { res.writeHead(200).end(); return; }
+      const m = JSON.parse(raw || "{}");
+      const send = (status, body, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(body)); };
+      if (m.method === "initialize") return send(200, { jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2025-06-18", capabilities: {}, serverInfo: { name: "stub-door" } } }, { "mcp-session-id": "sess-1234567890abcdef" });
+      if (m.method === "notifications/initialized") { res.writeHead(202).end(); return; }
+      if (m.method === "tools/list") return send(200, { jsonrpc: "2.0", id: m.id, result: { tools: [{ name: "lookup", description: "a tool" }, { name: "search", description: "a tool" }] } });
+      return send(403, { error: "refused by policy" });
+    });
+  });
+
+  it("Mock: the panel under the five working tabs shows the recorded scenario's rows as simulated, follows the scenario, and is absent on the diagram and the talk track; it only ever reads", async () => {
+    await mount();
+    expect(await screen.findByTestId("run-observability", {}, T)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("ro-table")).toBeInTheDocument(), T);
+    expect(screen.getByTestId("ro-basis")).toHaveTextContent(/Simulated/);
+    expect(screen.getByTestId("ro-coverage-gateway")).toHaveTextContent("Simulated"); expect(screen.getByTestId("ro-coverage-authorize")).toHaveTextContent("Not logged"); expect(screen.getByTestId("ro-coverage-resource")).toHaveTextContent("Not logged");
+    expect(simulated()).toBe(33);
+    expect(asked()[0]).toMatch(/vertical=finance&scenario=four-layers/);
+    await click("scenario-fail-closed");
+    await waitFor(() => expect(asked().at(-1)).toMatch(/scenario=fail-closed/), T);
+    await waitFor(() => expect(simulated()).toBe(19), T);
+    for (const t of ["Policies", "Approvals", "Where it runs", "Fail closed"]) { await tab(t); expect(await screen.findByTestId("run-observability", {}, T)).toBeInTheDocument(); }
+    await tab("Diagram"); expect(screen.queryByTestId("run-observability")).toBeNull();
+    await tab("Talk track"); expect(screen.queryByTestId("run-observability")).toBeNull();
+    expect(seen.filter((s) => /run-observability/.test(s.url) && s.body).length).toBe(0);
+    await settle();
+  });
+
+  it("Real with no gateway configured: the card says what is missing, the panel says no run was made and shows no record, asks the server for nothing, and Mock brings the record back", async () => {
+    await mount(); await live();
+    const card = await screen.findByTestId("privilege-check", {}, T);
+    await waitFor(() => expect(card).toHaveTextContent(/APL_GW_URL/), T);
+    const alert = await screen.findByText(/did not complete, so there is no run to show/, {}, T);
+    expect(alert).toHaveAttribute("role", "alert");
+    expect(screen.queryByTestId("ro-table")).toBeNull();
+    const before = asked().length;
+    await settle();
+    expect(asked().length).toBe(before);
+    expect(before).toBe(1); // the Mock record asked for on page load; none in Real
+    // choosing Real again (a stray change event) starts no new check, so it must not leave the panel waiting for one
+    await pick("mode-select", "real"); await settle();
+    expect(screen.getByText(/did not complete, so there is no run to show/)).toHaveAttribute("role", "alert"); expect(screen.queryByTestId("ro-loading")).toBeNull();
+    await pick("mode-select", "mock");
+    await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
+    await waitFor(() => expect(screen.getByTestId("ro-table")).toBeInTheDocument(), T);
+    await settle(); // no request of this test is still in flight when the next one resets the counter
+  });
+
+  it("Real: the panel shows what the gateway check received as `response` rows, waits for the next check's run (never the old record), keeps it across a Live evaluation and Reset, and Mock is a Mock record", async () => {
+    const gw = gateway();
+    await new Promise((r) => gw.listen(0, "127.0.0.1", r));
+    const keep = ["APL_GW_URL", "APL_GW_APPS", "APL_GW_KEY_LAB"].map((k) => [k, process.env[k]]);
+    Object.assign(process.env, { APL_GW_URL: `http://127.0.0.1:${gw.address().port}`, APL_GW_APPS: "door-a", APL_GW_KEY_LAB: KEY });
+    const patched = globalThis.fetch; // the hop's timeout signal is dropped in this jsdom process only (see the card test above)
+    globalThis.fetch = (u, init) => patched(u, init?.signal ? { ...init, signal: undefined } : init);
+    try {
+      await mount(); await live();
+      await waitFor(() => expect(screen.getByTestId("ro-table")).toBeInTheDocument(), T);
+      const first = asked().at(-1);
+      expect(first).toMatch(/runId=gw-[0-9a-f]{6}-\d+/);
+      expect(screen.getByTestId("ro-basis")).toHaveTextContent(/Real:/);
+      const origins = () => [...screen.getByTestId("ro-table").querySelectorAll("tr.ro-row")].map((r) => r.getAttribute("data-origin"));
+      expect(origins().filter((o) => o === "response")).toHaveLength(2);
+      expect(origins()).not.toContain("simulated"); expect(origins()).not.toContain("logged");
+      expect(screen.getByTestId("ro-coverage-gateway")).toHaveTextContent(/Response/); expect(screen.getByTestId("ro-coverage-privilege")).toHaveTextContent("Not logged");
+      expect(screen.getByTestId("ro-lab-note")).toHaveTextContent(/only the hop to the Privilege gateway/);
+      // the panel holds neither the key nor the gateway's address (the card above it does show its own address: that is the card's, not the panel's)
+      expect(document.body.textContent).not.toContain(KEY); expect(screen.getByTestId("run-observability").textContent).not.toContain("127.0.0.1");
+      // a Live evaluation (the engine's own decisions) adds nothing to a Real record and asks nothing new
+      await run("hold");
+      const evalsAsked = asked().length;
+      await settle();
+      expect(asked().length).toBe(evalsAsked);
+      expect(origins().filter((o) => o === "response")).toHaveLength(2);
+      // pressing the card's button starts a new check: the panel shows loading at once, never the old record, then the new run
+      expect(screen.getByTestId("gateway-trace-run")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: /Run the gateway check/ }));
+      expect(screen.getByTestId("ro-loading")).toBeInTheDocument(); expect(screen.queryByTestId("ro-table")).toBeNull();
+      expect(screen.queryByTestId("gateway-trace-run")).toBeNull(); // the last check's trace button is gone while the new check runs
+      await waitFor(() => expect(screen.getByTestId("ro-table")).toBeInTheDocument(), T);
+      const second = asked().at(-1);
+      expect(second).not.toBe(first);
+      // Reset clears the engine and leaves the gateway check record alone
+      await click("reset");
+      await settle();
+      expect(screen.getByTestId("ro-table")).toBeInTheDocument(); expect(asked().at(-1)).toBe(second);
+      // back to Mock: a Mock record, then Real again starts its own check
+      await pick("mode-select", "mock");
+      await waitFor(() => expect(screen.getByTestId("banner")).toHaveTextContent(/MOCK mode/), T);
+      await waitFor(() => expect(screen.getByTestId("ro-basis")).toHaveTextContent(/Simulated/), T);
+      await live();
+      await waitFor(() => expect(screen.getByTestId("ro-basis")).toHaveTextContent(/Real:/), T);
+      await settle();
     } finally {
       globalThis.fetch = patched;
       for (const [k, v] of keep) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }

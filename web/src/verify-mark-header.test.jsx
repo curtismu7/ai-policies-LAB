@@ -4,13 +4,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { createApp, startHttpServer } from "../../server/src/app.js";
 import { createHealth } from "../../server/src/health.js";
+import { createRunLog } from "../../server/src/runObs.js";
 import { forgetWorkspace } from "./workspace";
 import App from "./App";
 
 let server; let base; let shelf = null; const realFetch = globalThis.fetch;
 beforeAll(async () => {
   const health = createHealth({ runChecks: async () => [], intervalMs: 3_600_000 });
-  ({ server, url: base } = await startHttpServer({ port: 0, host: "127.0.0.1", app: createApp({ health, configFile: "/nonexistent/customer.config.json" }) }));
+  ({ server, url: base } = await startHttpServer({ port: 0, host: "127.0.0.1", app: createApp({ health, configFile: "/nonexistent/customer.config.json", runLog: createRunLog({ write: () => {} }) }) }));
   base = base.replace(/\/$/, "");
   globalThis.fetch = async (u, init = {}) => {
     if (u === "/api/shelf" && shelf) return new Response(JSON.stringify(shelf), { headers: { "content-type": "application/json" } });

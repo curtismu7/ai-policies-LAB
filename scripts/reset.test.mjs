@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp, startHttpServer } from '../server/src/app.js';
 import { createHealth } from '../server/src/health.js';
+import { createRunLog } from '../server/src/runObs.js';
 import { createWorkspaces } from '../server/src/workspaces.js';
 import { DEFAULT_CAST } from '../server/src/cast.js';
 import { reset } from './reset.mjs';
@@ -9,7 +10,7 @@ import { reset } from './reset.mjs';
 test('the reset script clears the default workspace (every vertical) and refuses a non-loopback host', async () => {
   const workspaces = createWorkspaces();
   const health = createHealth({ runChecks: async () => [], intervalMs: 3_600_000 });
-  const { server, url } = await startHttpServer({ port: 0, host: '127.0.0.1', app: createApp({ health, workspaces }) });
+  const { server, url } = await startHttpServer({ port: 0, host: '127.0.0.1', app: createApp({ health, workspaces, runLog: createRunLog({ write: () => {} }) }) });
   try {
     const base = url.replace(/\/$/, '');
     const e = workspaces.engine('default', 'finance', DEFAULT_CAST); workspaces.engine('other', 'finance', DEFAULT_CAST);

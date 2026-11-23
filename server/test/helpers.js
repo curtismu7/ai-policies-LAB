@@ -4,14 +4,17 @@ import { createHealth } from '../src/health.js';
 import { createWorkspaces } from '../src/workspaces.js';
 import { Engine } from '../src/engine.js';
 import { VERTICALS } from '../src/cast.js';
+import { createRunLog } from '../src/runObs.js';
 
 export const C = VERTICALS.finance;
 export const newEngine = (cast = C) => new Engine(cast);
 
-export async function withServer(fn, { configFile = '/nonexistent/customer.config.json', workspaces = createWorkspaces(), webDist, env } = {}) {
+// The run log writes one stdout line per Live decision (rule 27): the tests that are not about those lines get a silent writer, so the CI log stays readable.
+export const silentRunLog = () => createRunLog({ write: () => {} });
+export async function withServer(fn, { configFile = '/nonexistent/customer.config.json', workspaces = createWorkspaces(), webDist, env, runLog = silentRunLog() } = {}) {
   const health = createHealth({ runChecks: async () => [], intervalMs: 3_600_000 });
   await health.ready;
-  const { server, url } = await startHttpServer({ port: 0, host: '127.0.0.1', app: createApp({ health, configFile, workspaces, ...(webDist ? { webDist } : {}), ...(env ? { env } : {}) }) });
+  const { server, url } = await startHttpServer({ port: 0, host: '127.0.0.1', app: createApp({ health, configFile, workspaces, runLog, ...(webDist ? { webDist } : {}), ...(env ? { env } : {}) }) });
   try { await fn(url.replace(/\/$/, ''), { workspaces }); } finally { health.stop(); await new Promise((res) => server.close(res)); }
 }
 
