@@ -26,6 +26,8 @@ import { buildMethodTable, charsetProblem, isPageAddress, methodNotAllowed } fro
 import { readFileSettings, doorConfig, createRealDoor } from './gatewayReal.js';
 import { traceFromDoor } from './gatewayTrace.js';
 import { setAllowedOrigins } from './netguard.js';
+import { RunObsError } from './runObservability.js';
+import { createRunLog, mockRecord, realRecord, reportFailure, safely } from './runObs.js';
 
 // Real mode = the shared gateway hop: an agent key from the shared settings file calling a live Privilege door.
 // The environment wins over the file: APL_* variables overlay the parsed file text.
@@ -46,7 +48,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 // Every /api route the lab has and the methods it takes: ONE table, used for the 405 (with Allow) and nowhere else. ":name" matches one path segment; HEAD is allowed wherever
 // GET is. /api/health is not listed: its router answers its own 405. A path that is not in the table is a 404, never a 405.
 export const API_ROUTES = {
-  '/api/story': ['GET'], '/api/diagram': ['GET'], '/api/info': ['GET'], '/api/jwks': ['GET'], '/api/state': ['GET'], '/api/mode': ['POST'], '/api/gateway-check': ['POST'],
+  '/api/story': ['GET'], '/api/diagram': ['GET'], '/api/info': ['GET'], '/api/jwks': ['GET'], '/api/state': ['GET'], '/api/mode': ['POST'], '/api/gateway-check': ['POST'], '/api/run-observability': ['GET'],
   '/api/canonicalize': ['POST'], '/api/evaluate': ['POST'], '/api/token': ['POST'], '/api/clock': ['POST'], '/api/reset': ['POST'],
   '/api/approvals/:ref/decision': ['POST'],
   '/api/policies/:layer': ['PUT'],
@@ -54,7 +56,7 @@ export const API_ROUTES = {
 };
 const METHODS_OF = buildMethodTable(API_ROUTES);
 
-export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST, env = process.env, allowedHosts = parseAllowedHosts(env), port = resolvePort(env) } = {}) {
+export function createApp({ health = createHealth(), configFile = CONFIG, workspaces = createWorkspaces(), table = MOCK_TABLE, webDist = WEB_DIST, env = process.env, allowedHosts = parseAllowedHosts(env), port = resolvePort(env), runLog = createRunLog() } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Defence in depth: every JSON answer, from any handler and any status, is masked for credential-shaped values and keys before it leaves. The answers that hold only the
@@ -114,7 +116,12 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
     if (!door.apps.includes(app)) return res.status(400).json({ error: 'bad_app', detail: `app must be one of ${door.apps.join(', ')}` });
     const caller = req.body?.caller && door.callers.some((c) => c.id === req.body.caller) ? req.body.caller : door.callers[0].id;
     setAllowedOrigins([door.origin]); // the netguard lets the Real hop reach exactly this gateway origin and nothing else
+    // Rule 27: each answer the lab receives is one stdout line and one `response` row of this run, stamped when the reply came in (the helper also closes its session
+    // after the reply, so the time after the await is not the reply's). The run's id goes back so the page asks for THIS run's record.
+    const check = safely('begin-check', () => runLog.beginCheck(caller));
+    const listStarted = check?.mark();
     const { wire: listWire, ...listing } = await door.list(app, caller);
+    safely('tools-list-reply', () => check?.reply('tools/list', listing, listStarted));
     const out = { app, caller, gateway: door.origin, listing };
     // "What Privilege did" (Rule 25): a Real trace is built from the hop's own capture, so every decision is observed or inferred, never checked.
     const trace = { listing: traceFromDoor({ ...listing, wire: listWire }, { rpcMethod: 'tools/list' }) };
@@ -123,11 +130,44 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
       // refusal. So the probe borrows the server prefix of the first listed tool; a plain-named door keeps the plain name. The name exists nowhere, so nothing runs.
       const first = listing.tools?.[0]?.name;
       const server = typeof first === 'string' && first.includes('__') ? first.split('__')[0] : '';
+      const probeStarted = check?.mark();
       const { wire: probeWire, ...probe } = await door.call(app, caller, `${server ? `${server}__` : ''}ai_policies_refusal_probe_tool`, {});
+      safely('probe-reply', () => check?.reply('probe', probe, probeStarted));
       out.refusal = probe;
       trace.refusal = traceFromDoor({ ...probe, wire: probeWire }, { rpcMethod: 'tools/call' });
+    } else safely('probe-skipped', () => check?.skipped('The refusal probe is only sent after tools/list is answered with a tool list; it was not sent.'));
+    safely('end-check', () => check?.end());
+    res.json({ ...out, ...(check ? { runId: check.id } : {}), trace });
+  });
+
+  // The record of one run (rule 27). Mock: the recorded scenario's events. Real: what the lab received on a gateway check (the newest, or ?runId=). A run is only ever
+  // returned in the mode it was made in: the route follows the server's current mode, and a Real run is never built from a Mock table or the other way round.
+  // The wire value of the mode is mock|real; this lab's internal mode is mock|live, and Live is Real. The two are answered by name, so a third value would get a plain note.
+  api.get('/run-observability', async (req, res) => {
+    noStore(res);
+    const q = req.query;
+    if (!Object.keys(q).every((k) => ['vertical', 'scenario', 'runId'].includes(k))) return res.status(400).json({ error: 'unknown_field', message: 'the query carries a parameter the lab does not take' });
+    try {
+      const source = toSource(current);
+      if (source === 'real') {
+        if (q.runId !== undefined && typeof q.runId !== 'string') return res.status(400).json({ error: 'bad_run_id', message: 'runId must be one id' });
+        const run = runLog.get(q.runId);
+        if (!run) return res.json({ record: null, message: q.runId === undefined ? 'No gateway check has run in Real yet: nothing was received from the gateway, so there is nothing to show.' : 'That gateway check is no longer kept (the lab keeps the last few).' });
+        return res.json({ record: await realRecord(run) });
+      }
+      if (source === 'mock') {
+        if (q.vertical !== undefined && (typeof q.vertical !== 'string' || !Object.hasOwn(table.verticals, q.vertical))) return res.status(400).json({ error: 'bad_vertical', message: 'the lab has no such vertical' });
+        const vertical = verticalOf(req);
+        const sc = q.scenario;
+        if (sc !== undefined && (typeof sc !== 'string' || !table.verticals[vertical].scenarios.some((s) => s.id === sc))) return res.status(404).json({ error: 'unknown_scenario', message: 'there is no such scenario in this pack' });
+        return res.json({ record: await mockRecord(table, vertical, sc) });
+      }
+      return res.json({ record: null, message: 'The lab is in a mode that has no run record.' });
+    } catch (err) {
+      if (err instanceof RunObsError) return res.status(err.status).json({ error: err.code, message: err.message });
+      reportFailure('record', err);
+      return res.status(500).json({ error: 'run_record_failed', message: 'The record of this run could not be built; the server log says why.' });
     }
-    res.json({ ...out, trace });
   });
   api.get('/state', (req, res) => {
     const id = ws(req, res); if (!id) return;
@@ -167,7 +207,7 @@ export function createApp({ health = createHealth(), configFile = CONFIG, worksp
         if (mode === 'mock') return res.status(409).json({ error: 'mock_is_read_only', detail: 'Mock mode only reads tables: switch to Live to act' });
         if (!Object.keys(req.body).every((k) => ['mode', 'vertical', ...keys].includes(k))) return res.status(400).json({ error: 'unknown_field', detail: 'the body carries a field the lab does not take' });
         const vertical = verticalOf(req);
-        const r = runAction({ ws: id, workspaces, vertical, cast: castFor(req), op, params: params(req), traceparent: req.headers.traceparent, route: { method: method.toUpperCase(), url: `/api${route}` } });
+        const r = runAction({ ws: id, workspaces, vertical, cast: castFor(req), op, params: params(req), traceparent: req.headers.traceparent, route: { method: method.toUpperCase(), url: `/api${route}` }, observe: (r) => runLog.live(r) });
         res.set('traceparent', r.traceparent);
         const common = { workspace: id, mode, vertical, hops: r.hops, hopsTruncated: r.hopsTruncated, traceId: r.traceId, state: r.state };
         // Honest status codes: an evaluation answers 200 (allow), 401 (a token that does not verify) or 403 (deny, hold, withhold), and says which in the body. A refusal by

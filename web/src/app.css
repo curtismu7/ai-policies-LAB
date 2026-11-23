@@ -170,3 +170,5 @@ code { overflow-wrap: anywhere; }
 .gwhop .pcard { max-width: none; margin: 0; background: var(--surface); }
 .gwhop__trace { margin-top: 12px; }
 .gwhop__panel { margin-top: 16px; }
+/* The run-observability panel (rule 27) sits under the tab content with the same gap the panels have. */
+.obs { margin: 16px 0 0; }

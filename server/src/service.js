@@ -5,6 +5,7 @@ import { perform } from './actions.js';
 import { cleanFree, cleanUnderKey } from './credentials.js';
 import { newTrace, formatTraceparent } from './trace.js';
 import { policyTrace } from './policyTrace.js';
+import { mark, observeAction, safely } from './runObs.js';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -37,13 +38,16 @@ export function liveState(ws, workspaces, vertical, cast) {
 }
 
 // Runs one engine action for a workspace with a trace. Returns { outcome, hops, traceparent, state }.
-export function runAction({ ws, workspaces, vertical, cast, op, params, traceparent, route }) {
+// `observe` (optional) is handed the events of the action (rule 27, runObs.js); a recorder that throws is reported on stderr and never changes the answer.
+export function runAction({ ws, workspaces, vertical, cast, op, params, traceparent, route, observe }) {
   const e = workspaces.engine(ws, vertical, cast);
   const t = newTrace(traceparent);
   const root = t.span();
   e.trace = { traceId: t.traceId, span: t.span }; e.hops = []; e.hopsTruncated = false;
   let outcome;
+  const before = observe ? safely('mark', () => mark(e)) : undefined;
   try { outcome = perform(e, op, params); } finally { e.trace = null; }
+  if (before) safely('live-decisions', () => observe(observeAction(e, { op, outcome, before, params })));
   const status = outcome.ok ? (outcome.result?.http ?? 200) : outcome.status;
   const first = { n: 1, label: 'browser to the lab API', request: { method: route.method, url: route.url, headers: { traceparent: formatTraceparent(t.traceId, root), 'x-workspace': ws }, body: scrub(params) }, response: { status, body: outcome.ok ? { ok: true } : { error: outcome.code } } };
   const hops = [first, ...e.hops.map((h, i) => ({ ...h, n: i + 2 }))];

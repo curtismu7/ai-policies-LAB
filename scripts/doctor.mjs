@@ -20,8 +20,9 @@ for (const c of await runChecks()) report(c.level, c.id, c.detail);
 try {
   const { createApp, startHttpServer } = await load('server/src/app.js');
   const { createHealth } = await load('server/src/health.js');
+  const { createRunLog } = await load('server/src/runObs.js'); // the cycle below is not a log: its decision lines are not printed
   const health = createHealth({ runChecks: async () => [], intervalMs: 3_600_000 });
-  const { server, url } = await startHttpServer({ port: 0, host: '127.0.0.1', app: createApp({ health }) });
+  const { server, url } = await startHttpServer({ port: 0, host: '127.0.0.1', app: createApp({ health, runLog: createRunLog({ write: () => {} }) }) });
   try {
     const base = url.replace(/\/$/, ''); const h = { 'content-type': 'application/json', origin: base, 'x-workspace': 'doctor' };
     const post = async (p, b) => { const r = await fetch(base + p, { method: 'POST', headers: h, body: JSON.stringify({ mode: 'live', vertical: 'finance', ...b }) }); return { status: r.status, body: await r.json() }; };
