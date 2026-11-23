@@ -9,6 +9,8 @@ export default function LastAction({ last }) {
       <h2 className="panel__sub">Last action: <code>{last.route}</code> {last.ok ? "done" : `refused (${last.error})`}</h2>
       {!last.ok && last.detail && <p className="field-error" role="alert">{visible(last.detail)}</p>}
       <Hops hops={last.hops} traceId={last.traceId} truncated={last.truncated} />
+      {/* The one primary action on the Live page: the next step is on the Evaluate tab. */}
+      <button type="button" className="primary" onClick={() => { window.location.hash = "#evaluate"; }}>Run next step</button>
     </section>
   );
 }
