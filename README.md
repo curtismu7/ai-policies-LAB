@@ -98,7 +98,7 @@ Other variables: `VITE_PORT` (Vite dev server, default 7501, `npm run dev -w web
 
 ## Mock and live modes
 
-The header has a **Mock / Live** toggle on every page, and the banner and the mode chip show the same mode. Mock reads tables generated from the engine (six scripted scenarios per vertical; a scenario picker on the Evaluate tab) and is read-only: every write control is off and the API answers 409. Live drives this workspace's engine (one per vertical): it mints tokens, evaluates your calls, keeps the approvals, outbox, audit trail and lab clock, and lets you edit the policy.
+The header has a **Mock / Live** toggle on every page, and the Mock or Real modal the page opens with and the mode chip show the same mode. Mock reads tables generated from the engine (six scripted scenarios per vertical; a scenario picker on the Evaluate tab) and is read-only: every write control is off and the API answers 409. Live drives this workspace's engine (one per vertical): it mints tokens, evaluates your calls, keeps the approvals, outbox, audit trail and lab clock, and lets you edit the policy.
 
 ## Health, doctor and reset
 
