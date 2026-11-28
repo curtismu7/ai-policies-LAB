@@ -18,6 +18,7 @@ import { buildPresets } from "./presets";
 import { getJson, postJson, resetWorkspace } from "./api";
 import GatewayHop from "./components/GatewayHop";
 import RunObs from "./components/RunObs";
+import ModeModal from "./mode-modal/ModeModal.jsx";
 
 export const TABS = [
   { id: "evaluate", label: "Evaluate" },
@@ -28,9 +29,12 @@ export const TABS = [
   { id: "diagram", label: "Diagram" },
   { id: "talk", label: "Talk track" },
 ];
-// The banner is never blank and never claims one mode before it knows: until the story answers it says both, honestly.
-const TAIL = "Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). No identity provider, chat tool or tenant is called; the only real call is the optional Privilege gateway card, in Real.";
-export const BANNER_UNKNOWN = `SIMULATED, MOCK or LIVE mode (Mock is loopback only with no outbound network). ${TAIL}`;
+// The Real-or-mock modal's lines (it replaced the simulation banner). The lab calls its Real mode "Live". The lab's own engine decides in both modes, and every
+// product claim stays "Ping release claim, UNVERIFIED on our tenant". Until the server answers which mode it holds (or if that fails) the modal says MOCK.
+const MODE_LINES = {
+  mock: "Everything here is simulated: tables generated from the lab's own evaluation engine, read-only, with no real gateway, identity provider, chat tool, ticket system or tenant touched. Every product claim is a Ping release claim, UNVERIFIED on our tenant (release 2026-11-02). The rule formats, claim names and canonical hash are the lab's own.",
+  real: "Live: the lab's own local engine, still a simulation, evaluates your calls against real RS256 tokens you mint here (a throwaway key, loopback only). The one real call is the Privilege gateway card; every product claim is still a Ping release claim, UNVERIFIED on our tenant.",
+};
 // The tabs that run or show the engine: the run panel (rule 27) and the last action sit under them, not under the diagram or the talk track.
 const WORKING_TABS = ["evaluate", "policies", "approvals", "where", "closed"];
 const PRESENTER_TALK = { evaluate: ["say-first", "two-controls", "four-layers"], policies: ["four-layers"], approvals: ["hold", "bound", "period"], where: ["where", "hard"], closed: ["closed"], diagram: ["why-ai-policies"] };
@@ -88,7 +92,7 @@ export default function App() {
     return () => window.removeEventListener("hashchange", on);
   }, []);
   useEffect(() => { ev.setForm(null); ev.setDecision(null); }, [mode, vertical]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Rule 19: switching is a server call (POST /api/mode with exactly {source}), then the data reloads so the banner,
+  // Rule 19: switching is a server call (POST /api/mode with exactly {source}), then the data reloads so the modal,
   // mode badge and every tab reflect the mode the server answered with.
   const [modeError, setModeError] = useState(null);
   const setMode = async (m) => {
@@ -121,7 +125,6 @@ export default function App() {
     setResetMsg(ok ? "Reset: your workspace's approvals, outbox, audit trail, edited policy and the lab clock are back to the start, and the diagram is back in place." : "Reset failed on the server; the view was reloaded.");
   }, [lab.reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const banner = story && mode ? story.banner[mode] : BANNER_UNKNOWN;
   const ready = story && mode;
   const props = { story, mode, vertical, lab };
   return (
@@ -154,7 +157,6 @@ export default function App() {
         </TopMenu>
       </header>
       <main className="page">
-        <p className="banner" role="status" data-state={mode === "live" ? "live" : "mock"} data-testid="banner">{banner}</p>
         {modeError && <p className="app-error" role="alert" data-testid="mode-error">{modeError}</p>}
         <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
         {!presenter && story && <p className="page-intro">{story.intro}</p>}
@@ -181,6 +183,7 @@ export default function App() {
           )}
         </div>
       </main>
+      <ModeModal mode={mode === "live" ? "real" : "mock"} lines={MODE_LINES} storageKey="aip-mode" />
     </div>
   );
 }
