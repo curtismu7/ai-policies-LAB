@@ -9,6 +9,8 @@ import WhereTab from "./components/WhereTab";
 import FailClosedTab from "./components/FailClosedTab";
 import DiagramTab from "./components/DiagramTab";
 import TalkTrack from "./components/TalkTrack";
+import HelpDialog from "./help-dialog/HelpDialog";
+import { HELP_SECTIONS } from "./helpContent";
 import LastAction from "./components/LastAction";
 import useLab from "./hooks/useLab";
 import useEvaluator from "./hooks/useEvaluator";
@@ -55,6 +57,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [tab, setTab] = useState(tabFromHash());
   const [presenter, setPresenter] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   // Rule 27: where the page's gateway check (the card, in Real) is, so the run panel asks for THAT check's record and never shows an older one.
   const [check, setCheck] = useState({ phase: "checking" });
   const onCheck = useCallback((next) => setCheck(next.phase === "done" ? { phase: "done", runId: typeof next.runId === "string" ? next.runId : null } : { phase: next.phase, reason: next.reason }), []);
@@ -143,7 +146,7 @@ export default function App() {
           fontSize={{ value: fontStep, onChange: setFontStep }}
           present={{ active: presenter, onToggle: () => setPresenter((v) => !v) }}
           talkTrack={{ active: tab === "talk", onToggle: () => select("talk") }}
-          help={{ href: "https://github.com/curtismu7/ai-policies-LAB#readme" }}
+          help={{ onClick: () => setHelpOpen(true), title: "What this lab is, and what is simulated" }}
           onReset={reset}
         >
           <ShelfLink />
@@ -171,6 +174,7 @@ export default function App() {
               {tab === "closed" && <FailClosedTab {...props} ev={ev} presets={presets} />}
               {tab === "diagram" && <DiagramTab vertical={vertical} resetSignal={resetSignal} />}
               {tab === "talk" && <TalkTrack talk={story.talkTrack} />}
+              <HelpDialog isOpen={helpOpen} onClose={() => setHelpOpen(false)} sections={HELP_SECTIONS} docsUrl="https://github.com/curtismu7/ai-policies-LAB#readme" />
               {mode === "live" && WORKING_TABS.includes(tab) && <LastAction last={lab.last} />}
               {WORKING_TABS.includes(tab) && <RunObs source={mode === "live" ? "real" : "mock"} vertical={vertical} scenarioId={lab.scenario?.id} check={check} />}
             </>
